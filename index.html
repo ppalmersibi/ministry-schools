@@ -768,10 +768,11 @@ tr:hover td { background: #fdf8f0; }
               <textarea id="grf-notes" placeholder="Notes about this cohort…"></textarea>
             </div>
             <div class="mini-form-actions">
-              <button class="btn btn-ghost btn-sm" onclick="toggleMiniForm('grad-form')">Cancel</button>
-              <button class="btn btn-primary btn-sm" onclick="addGradCohort()">Save Cohort</button>
+              <button class="btn btn-ghost btn-sm" onclick="closeMiniForm('grad-form')">Cancel</button>
+              <button class="btn btn-primary btn-sm" id="grf-save-btn" onclick="addGradCohort()">Save Cohort</button>
             </div>
           </div>
+          <input type="hidden" id="grf-editing-id">
           <div id="grad-list"></div>
         </div>
       </div>
@@ -790,10 +791,11 @@ tr:hover td { background: #fdf8f0; }
             <textarea id="vf-notes" placeholder="Visit notes, outcomes, follow-ups…"></textarea>
           </div>
           <div class="mini-form-actions">
-            <button class="btn btn-ghost btn-sm" onclick="toggleMiniForm('visit-form')">Cancel</button>
-            <button class="btn btn-primary btn-sm" onclick="addVisit()">Save Visit</button>
+            <button class="btn btn-ghost btn-sm" onclick="closeMiniForm('visit-form')">Cancel</button>
+            <button class="btn btn-primary btn-sm" id="vf-save-btn" onclick="addVisit()">Save Visit</button>
           </div>
         </div>
+        <input type="hidden" id="vf-editing-id">
         <div id="visits-list"></div>
       </div>
 
@@ -813,10 +815,11 @@ tr:hover td { background: #fdf8f0; }
             <textarea id="gtf-notes" placeholder="Notes…"></textarea>
           </div>
           <div class="mini-form-actions">
-            <button class="btn btn-ghost btn-sm" onclick="toggleMiniForm('gt-form')">Cancel</button>
-            <button class="btn btn-primary btn-sm" onclick="addGuestTeacher()">Save</button>
+            <button class="btn btn-ghost btn-sm" onclick="closeMiniForm('gt-form')">Cancel</button>
+            <button class="btn btn-primary btn-sm" id="gtf-save-btn" onclick="addGuestTeacher()">Save</button>
           </div>
         </div>
+        <input type="hidden" id="gtf-editing-id">
         <div id="gt-list"></div>
       </div>
 
@@ -835,10 +838,11 @@ tr:hover td { background: #fdf8f0; }
             <textarea id="ff-notes" placeholder="Notes…"></textarea>
           </div>
           <div class="mini-form-actions">
-            <button class="btn btn-ghost btn-sm" onclick="toggleMiniForm('fin-form')">Cancel</button>
-            <button class="btn btn-primary btn-sm" onclick="addFinancial()">Save</button>
+            <button class="btn btn-ghost btn-sm" onclick="closeMiniForm('fin-form')">Cancel</button>
+            <button class="btn btn-primary btn-sm" id="ff-save-btn" onclick="addFinancial()">Save</button>
           </div>
         </div>
+        <input type="hidden" id="ff-editing-id">
         <div id="fin-summary"></div>
         <div id="fin-list"></div>
       </div>
@@ -861,10 +865,11 @@ tr:hover td { background: #fdf8f0; }
             <textarea id="df-notes" placeholder="Notes (relationship, history, prayer needs)…"></textarea>
           </div>
           <div class="mini-form-actions">
-            <button class="btn btn-ghost btn-sm" onclick="toggleMiniForm('donor-form')">Cancel</button>
-            <button class="btn btn-primary btn-sm" onclick="addDonor()">Save</button>
+            <button class="btn btn-ghost btn-sm" onclick="closeMiniForm('donor-form')">Cancel</button>
+            <button class="btn btn-primary btn-sm" id="df-save-btn" onclick="addDonor()">Save</button>
           </div>
         </div>
+        <input type="hidden" id="df-editing-id">
         <div id="donor-list"></div>
       </div>
 
@@ -883,10 +888,11 @@ tr:hover td { background: #fdf8f0; }
             <textarea id="if-desc" placeholder="Description and goals…"></textarea>
           </div>
           <div class="mini-form-actions">
-            <button class="btn btn-ghost btn-sm" onclick="toggleMiniForm('init-form')">Cancel</button>
-            <button class="btn btn-primary btn-sm" onclick="addInitiative()">Save</button>
+            <button class="btn btn-ghost btn-sm" onclick="closeMiniForm('init-form')">Cancel</button>
+            <button class="btn btn-primary btn-sm" id="if-save-btn" onclick="addInitiative()">Save</button>
           </div>
         </div>
+        <input type="hidden" id="if-editing-id">
         <div id="init-list"></div>
       </div>
 
@@ -1149,11 +1155,14 @@ function renderPartners() {
   const active = DB.schools.filter(s=>s.status==='Active').length;
   const countries = new Set(DB.schools.map(s=>s.country).filter(Boolean)).size;
   const totalEnroll = DB.schools.reduce((a,s)=>a+(parseInt(s.enrollment)||0),0);
+  const allVisitDates = DB.schools.flatMap(s=>(s.visits||[]).map(v=>v.date)).filter(Boolean);
+  const lastVisitYear = allVisitDates.length ? allVisitDates.sort().at(-1).slice(0,4) : '—';
   document.getElementById('partner-stats').innerHTML = `
     <div class="stat-card"><div class="stat-label">Total Schools</div><div class="stat-val">${DB.schools.length}</div></div>
     <div class="stat-card"><div class="stat-label">Active</div><div class="stat-val">${active}</div></div>
     <div class="stat-card"><div class="stat-label">Countries</div><div class="stat-val">${countries}</div></div>
     <div class="stat-card"><div class="stat-label">Total Enrollment</div><div class="stat-val">${totalEnroll.toLocaleString()}</div></div>
+    <div class="stat-card"><div class="stat-label">Last Site Visit</div><div class="stat-val">${lastVisitYear}</div></div>
   `;
 }
 
@@ -1318,24 +1327,82 @@ function renderFacultyList() {
 }
 
 // ── MINI FORMS ──
+const MINI_FORM_FIELDS = {
+  'visit-form':  ['vf-date','vf-purpose','vf-attendees','vf-notes'],
+  'gt-form':     ['gtf-name','gtf-from','gtf-to','gtf-subject','gtf-notes'],
+  'fin-form':    ['ff-date','ff-amount','ff-desc','ff-notes'],
+  'donor-form':  ['df-name','df-contact','df-email','df-phone','df-giving','df-since','df-notes'],
+  'init-form':   ['if-name','if-start','if-end','if-desc'],
+  'grad-form':   ['grf-year','grf-count','grf-program','grf-notes'],
+};
+const MINI_FORM_EDIT_IDS = {
+  'visit-form':'vf-editing-id','gt-form':'gtf-editing-id','fin-form':'ff-editing-id',
+  'donor-form':'df-editing-id','init-form':'if-editing-id','grad-form':'grf-editing-id'
+};
+const MINI_FORM_BTN_IDS = {
+  'visit-form':'vf-save-btn','gt-form':'gtf-save-btn','fin-form':'ff-save-btn',
+  'donor-form':'df-save-btn','init-form':'if-save-btn','grad-form':'grf-save-btn'
+};
+const MINI_FORM_BTN_LABELS = {
+  'visit-form':'Save Visit','gt-form':'Save','fin-form':'Save',
+  'donor-form':'Save','init-form':'Save','grad-form':'Save Cohort'
+};
+
+function miniFormIsDirty(id) {
+  return (MINI_FORM_FIELDS[id]||[]).some(fid => {
+    const el = document.getElementById(fid);
+    return el && el.value.trim() !== '';
+  });
+}
+
+function closeMiniForm(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (el.classList.contains('open') && miniFormIsDirty(id)) {
+    if (!confirm('You have unsaved changes. Discard them?')) return;
+  }
+  el.classList.remove('open');
+  (MINI_FORM_FIELDS[id]||[]).forEach(fid => { const f=document.getElementById(fid); if(f) f.value=''; });
+  const eid = document.getElementById(MINI_FORM_EDIT_IDS[id]);
+  if (eid) eid.value = '';
+  const btn = document.getElementById(MINI_FORM_BTN_IDS[id]);
+  if (btn) btn.textContent = MINI_FORM_BTN_LABELS[id] || 'Save';
+}
+
 function toggleMiniForm(id) {
-  document.getElementById(id).classList.toggle('open');
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (el.classList.contains('open')) { closeMiniForm(id); }
+  else { el.classList.add('open'); }
 }
 
 // ── VISITS ──
 function addVisit() {
+  const id = document.getElementById('vf-editing-id').value;
   const v = {
-    id:'v'+Date.now(),
+    id: id||'v'+Date.now(),
     date:document.getElementById('vf-date').value,
     purpose:document.getElementById('vf-purpose').value.trim(),
     attendees:document.getElementById('vf-attendees').value.trim(),
     notes:document.getElementById('vf-notes').value.trim()
   };
   if (!v.date && !v.purpose) return;
-  tempVisits.push(v);
-  ['vf-date','vf-purpose','vf-attendees','vf-notes'].forEach(id=>document.getElementById(id).value='');
-  toggleMiniForm('visit-form');
+  if (id) { const i=tempVisits.findIndex(x=>x.id===id); tempVisits[i]=v; }
+  else tempVisits.push(v);
+  ['vf-date','vf-purpose','vf-attendees','vf-notes','vf-editing-id'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('vf-save-btn').textContent='Save Visit';
+  document.getElementById('visit-form').classList.remove('open');
   renderVisitsList();
+}
+function editVisit(id){
+  const v=tempVisits.find(x=>x.id===id); if(!v)return;
+  document.getElementById('vf-date').value=v.date||'';
+  document.getElementById('vf-purpose').value=v.purpose||'';
+  document.getElementById('vf-attendees').value=v.attendees||'';
+  document.getElementById('vf-notes').value=v.notes||'';
+  document.getElementById('vf-editing-id').value=id;
+  document.getElementById('vf-save-btn').textContent='Update Visit';
+  document.getElementById('visit-form').classList.add('open');
 }
 function removeVisit(id) { tempVisits=tempVisits.filter(v=>v.id!==id); renderVisitsList(); }
 function renderVisitsList() {
@@ -1349,20 +1416,38 @@ function renderVisitsList() {
         ${v.attendees?`<div class="list-item-sub">Attendees: ${esc(v.attendees)}</div>`:''}
         ${v.notes?`<div class="list-item-sub" style="margin-top:4px;">${esc(v.notes)}</div>`:''}
       </div>
-      <div class="list-actions"><button class="btn-icon danger" onclick="removeVisit('${v.id}')">🗑</button></div>
+      <div class="list-actions">
+        <button class="btn-icon" title="Edit" onclick="editVisit('${v.id}')">✏️</button>
+        <button class="btn-icon danger" onclick="removeVisit('${v.id}')">🗑</button>
+      </div>
     </div>
   `).join('')+'</div>';
 }
 
 // ── GUEST TEACHERS ──
 function addGuestTeacher() {
-  const g={id:'g'+Date.now(),name:document.getElementById('gtf-name').value.trim(),type:document.getElementById('gtf-type').value,from:document.getElementById('gtf-from').value,to:document.getElementById('gtf-to').value,subject:document.getElementById('gtf-subject').value.trim(),notes:document.getElementById('gtf-notes').value.trim()};
+  const id=document.getElementById('gtf-editing-id').value;
+  const g={id:id||'g'+Date.now(),name:document.getElementById('gtf-name').value.trim(),type:document.getElementById('gtf-type').value,from:document.getElementById('gtf-from').value,to:document.getElementById('gtf-to').value,subject:document.getElementById('gtf-subject').value.trim(),notes:document.getElementById('gtf-notes').value.trim()};
   if(!g.name) return;
-  tempGuestTeachers.push(g);
-  ['gtf-name','gtf-from','gtf-to','gtf-subject','gtf-notes'].forEach(id=>document.getElementById(id).value='');
+  if(id){const i=tempGuestTeachers.findIndex(x=>x.id===id);tempGuestTeachers[i]=g;}
+  else tempGuestTeachers.push(g);
+  ['gtf-name','gtf-from','gtf-to','gtf-subject','gtf-notes','gtf-editing-id'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('gtf-type').value='Guest Teacher';
-  toggleMiniForm('gt-form');
+  document.getElementById('gtf-save-btn').textContent='Save';
+  document.getElementById('gt-form').classList.remove('open');
   renderGTList();
+}
+function editGT(id){
+  const g=tempGuestTeachers.find(x=>x.id===id);if(!g)return;
+  document.getElementById('gtf-name').value=g.name||'';
+  document.getElementById('gtf-type').value=g.type||'Guest Teacher';
+  document.getElementById('gtf-from').value=g.from||'';
+  document.getElementById('gtf-to').value=g.to||'';
+  document.getElementById('gtf-subject').value=g.subject||'';
+  document.getElementById('gtf-notes').value=g.notes||'';
+  document.getElementById('gtf-editing-id').value=id;
+  document.getElementById('gtf-save-btn').textContent='Update';
+  document.getElementById('gt-form').classList.add('open');
 }
 function removeGT(id){tempGuestTeachers=tempGuestTeachers.filter(g=>g.id!==id);renderGTList();}
 function renderGTList(){
@@ -1375,20 +1460,37 @@ function renderGTList(){
         <div class="list-item-sub">${[g.from,g.to].filter(Boolean).join(' – ')}${g.subject?' · '+esc(g.subject):''}</div>
         ${g.notes?`<div class="list-item-sub" style="margin-top:3px;">${esc(g.notes)}</div>`:''}
       </div>
-      <div class="list-actions"><button class="btn-icon danger" onclick="removeGT('${g.id}')">🗑</button></div>
+      <div class="list-actions">
+        <button class="btn-icon" title="Edit" onclick="editGT('${g.id}')">✏️</button>
+        <button class="btn-icon danger" onclick="removeGT('${g.id}')">🗑</button>
+      </div>
     </div>
   `).join('')+'</div>';
 }
 
 // ── FINANCIALS ──
 function addFinancial(){
-  const f={id:'f'+Date.now(),date:document.getElementById('ff-date').value,type:document.getElementById('ff-type').value,amount:document.getElementById('ff-amount').value,desc:document.getElementById('ff-desc').value.trim(),notes:document.getElementById('ff-notes').value.trim()};
+  const id=document.getElementById('ff-editing-id').value;
+  const f={id:id||'f'+Date.now(),date:document.getElementById('ff-date').value,type:document.getElementById('ff-type').value,amount:document.getElementById('ff-amount').value,desc:document.getElementById('ff-desc').value.trim(),notes:document.getElementById('ff-notes').value.trim()};
   if(!f.amount&&!f.desc) return;
-  tempFinancials.push(f);
-  ['ff-date','ff-amount','ff-desc','ff-notes'].forEach(id=>document.getElementById(id).value='');
+  if(id){const i=tempFinancials.findIndex(x=>x.id===id);tempFinancials[i]=f;}
+  else tempFinancials.push(f);
+  ['ff-date','ff-amount','ff-desc','ff-notes','ff-editing-id'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('ff-type').value='Grant';
-  toggleMiniForm('fin-form');
+  document.getElementById('ff-save-btn').textContent='Save';
+  document.getElementById('fin-form').classList.remove('open');
   renderFinancialList();
+}
+function editFin(id){
+  const f=tempFinancials.find(x=>x.id===id);if(!f)return;
+  document.getElementById('ff-date').value=f.date||'';
+  document.getElementById('ff-type').value=f.type||'Grant';
+  document.getElementById('ff-amount').value=f.amount||'';
+  document.getElementById('ff-desc').value=f.desc||'';
+  document.getElementById('ff-notes').value=f.notes||'';
+  document.getElementById('ff-editing-id').value=id;
+  document.getElementById('ff-save-btn').textContent='Update';
+  document.getElementById('fin-form').classList.add('open');
 }
 function removeFin(id){tempFinancials=tempFinancials.filter(f=>f.id!==id);renderFinancialList();}
 function renderFinancialList(){
@@ -1404,20 +1506,37 @@ function renderFinancialList(){
         ${f.desc?`<div class="list-item-sub">${esc(f.desc)}</div>`:''}
         ${f.notes?`<div class="list-item-sub">${esc(f.notes)}</div>`:''}
       </div>
-      <div class="list-actions"><button class="btn-icon danger" onclick="removeFin('${f.id}')">🗑</button></div>
+      <div class="list-actions">
+        <button class="btn-icon" title="Edit" onclick="editFin('${f.id}')">✏️</button>
+        <button class="btn-icon danger" onclick="removeFin('${f.id}')">🗑</button>
+      </div>
     </div>
   `).join('')+'</div>';
 }
 
 // ── INITIATIVES ──
 function addInitiative(){
-  const it={id:'i'+Date.now(),name:document.getElementById('if-name').value.trim(),status:document.getElementById('if-status').value,start:document.getElementById('if-start').value,end:document.getElementById('if-end').value,desc:document.getElementById('if-desc').value.trim()};
+  const id=document.getElementById('if-editing-id').value;
+  const it={id:id||'i'+Date.now(),name:document.getElementById('if-name').value.trim(),status:document.getElementById('if-status').value,start:document.getElementById('if-start').value,end:document.getElementById('if-end').value,desc:document.getElementById('if-desc').value.trim()};
   if(!it.name) return;
-  tempInitiatives.push(it);
-  ['if-name','if-start','if-end','if-desc'].forEach(id=>document.getElementById(id).value='');
+  if(id){const i=tempInitiatives.findIndex(x=>x.id===id);tempInitiatives[i]=it;}
+  else tempInitiatives.push(it);
+  ['if-name','if-start','if-end','if-desc','if-editing-id'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('if-status').value='Active';
-  toggleMiniForm('init-form');
+  document.getElementById('if-save-btn').textContent='Save';
+  document.getElementById('init-form').classList.remove('open');
   renderInitiativesList();
+}
+function editInit(id){
+  const it=tempInitiatives.find(x=>x.id===id);if(!it)return;
+  document.getElementById('if-name').value=it.name||'';
+  document.getElementById('if-status').value=it.status||'Active';
+  document.getElementById('if-start').value=it.start||'';
+  document.getElementById('if-end').value=it.end||'';
+  document.getElementById('if-desc').value=it.desc||'';
+  document.getElementById('if-editing-id').value=id;
+  document.getElementById('if-save-btn').textContent='Update';
+  document.getElementById('init-form').classList.add('open');
 }
 function removeInit(id){tempInitiatives=tempInitiatives.filter(i=>i.id!==id);renderInitiativesList();}
 function renderInitiativesList(){
@@ -1430,19 +1549,35 @@ function renderInitiativesList(){
         <div class="list-item-sub">${[it.start,it.end].filter(Boolean).join(' – ')}</div>
         ${it.desc?`<div class="list-item-sub" style="margin-top:3px;">${esc(it.desc)}</div>`:''}
       </div>
-      <div class="list-actions"><button class="btn-icon danger" onclick="removeInit('${it.id}')">🗑</button></div>
+      <div class="list-actions">
+        <button class="btn-icon" title="Edit" onclick="editInit('${it.id}')">✏️</button>
+        <button class="btn-icon danger" onclick="removeInit('${it.id}')">🗑</button>
+      </div>
     </div>
   `).join('')+'</div>';
 }
 
 // ── GRAD COHORTS ──
 function addGradCohort(){
-  const c={id:'gc'+Date.now(),year:document.getElementById('grf-year').value,count:document.getElementById('grf-count').value,program:document.getElementById('grf-program').value.trim(),notes:document.getElementById('grf-notes').value.trim()};
+  const id=document.getElementById('grf-editing-id').value;
+  const c={id:id||'gc'+Date.now(),year:document.getElementById('grf-year').value,count:document.getElementById('grf-count').value,program:document.getElementById('grf-program').value.trim(),notes:document.getElementById('grf-notes').value.trim()};
   if(!c.year&&!c.count) return;
-  tempGradCohorts.push(c);
-  ['grf-year','grf-count','grf-program','grf-notes'].forEach(id=>document.getElementById(id).value='');
-  toggleMiniForm('grad-form');
+  if(id){const i=tempGradCohorts.findIndex(x=>x.id===id);tempGradCohorts[i]=c;}
+  else tempGradCohorts.push(c);
+  ['grf-year','grf-count','grf-program','grf-notes','grf-editing-id'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('grf-save-btn').textContent='Save Cohort';
+  document.getElementById('grad-form').classList.remove('open');
   renderGradCohortList();
+}
+function editGradCohort(id){
+  const c=tempGradCohorts.find(x=>x.id===id);if(!c)return;
+  document.getElementById('grf-year').value=c.year||'';
+  document.getElementById('grf-count').value=c.count||'';
+  document.getElementById('grf-program').value=c.program||'';
+  document.getElementById('grf-notes').value=c.notes||'';
+  document.getElementById('grf-editing-id').value=id;
+  document.getElementById('grf-save-btn').textContent='Update Cohort';
+  document.getElementById('grad-form').classList.add('open');
 }
 function removeGradCohort(id){tempGradCohorts=tempGradCohorts.filter(c=>c.id!==id);renderGradCohortList();}
 function renderGradCohortList(){
@@ -1463,20 +1598,40 @@ function renderGradCohortList(){
         </div>
         ${c.notes?`<div class="list-item-sub" style="margin-top:3px;">${esc(c.notes)}</div>`:''}
       </div>
-      <div class="list-actions"><button class="btn-icon danger" onclick="removeGradCohort('${c.id}')">🗑</button></div>
+      <div class="list-actions">
+        <button class="btn-icon" title="Edit" onclick="editGradCohort('${c.id}')">✏️</button>
+        <button class="btn-icon danger" onclick="removeGradCohort('${c.id}')">🗑</button>
+      </div>
     </div>
   `).join('')+'</div>';
 }
 
 // ── DONORS / SUPPORTERS ──
 function addDonor(){
-  const d={id:'d'+Date.now(),name:document.getElementById('df-name').value.trim(),type:document.getElementById('df-type').value,contact:document.getElementById('df-contact').value.trim(),email:document.getElementById('df-email').value.trim(),phone:document.getElementById('df-phone').value.trim(),giving:document.getElementById('df-giving').value.trim(),since:document.getElementById('df-since').value,notes:document.getElementById('df-notes').value.trim()};
+  const id=document.getElementById('df-editing-id').value;
+  const d={id:id||'d'+Date.now(),name:document.getElementById('df-name').value.trim(),type:document.getElementById('df-type').value,contact:document.getElementById('df-contact').value.trim(),email:document.getElementById('df-email').value.trim(),phone:document.getElementById('df-phone').value.trim(),giving:document.getElementById('df-giving').value.trim(),since:document.getElementById('df-since').value,notes:document.getElementById('df-notes').value.trim()};
   if(!d.name) return;
-  tempDonors.push(d);
-  ['df-name','df-contact','df-email','df-phone','df-giving','df-since','df-notes'].forEach(id=>document.getElementById(id).value='');
+  if(id){const i=tempDonors.findIndex(x=>x.id===id);tempDonors[i]=d;}
+  else tempDonors.push(d);
+  ['df-name','df-contact','df-email','df-phone','df-giving','df-since','df-notes','df-editing-id'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('df-type').value='Individual';
-  toggleMiniForm('donor-form');
+  document.getElementById('df-save-btn').textContent='Save';
+  document.getElementById('donor-form').classList.remove('open');
   renderDonorList();
+}
+function editDonor(id){
+  const d=tempDonors.find(x=>x.id===id);if(!d)return;
+  document.getElementById('df-name').value=d.name||'';
+  document.getElementById('df-type').value=d.type||'Individual';
+  document.getElementById('df-contact').value=d.contact||'';
+  document.getElementById('df-email').value=d.email||'';
+  document.getElementById('df-phone').value=d.phone||'';
+  document.getElementById('df-giving').value=d.giving||'';
+  document.getElementById('df-since').value=d.since||'';
+  document.getElementById('df-notes').value=d.notes||'';
+  document.getElementById('df-editing-id').value=id;
+  document.getElementById('df-save-btn').textContent='Update';
+  document.getElementById('donor-form').classList.add('open');
 }
 function removeDonor(id){tempDonors=tempDonors.filter(d=>d.id!==id);renderDonorList();}
 function renderDonorList(){
@@ -1491,7 +1646,10 @@ function renderDonorList(){
         ${d.giving?`<div class="list-item-sub">Giving: ${esc(d.giving)}${d.since?' · Since '+d.since:''}</div>`:(d.since?`<div class="list-item-sub">Since: ${d.since}</div>`:'')}
         ${d.notes?`<div class="list-item-sub" style="margin-top:3px;">${esc(d.notes)}</div>`:''}
       </div>
-      <div class="list-actions"><button class="btn-icon danger" onclick="removeDonor('${d.id}')">🗑</button></div>
+      <div class="list-actions">
+        <button class="btn-icon" title="Edit" onclick="editDonor('${d.id}')">✏️</button>
+        <button class="btn-icon danger" onclick="removeDonor('${d.id}')">🗑</button>
+      </div>
     </div>
   `).join('')+'</div>';
 }
