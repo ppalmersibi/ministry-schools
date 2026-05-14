@@ -588,12 +588,6 @@ tr:hover td { background: #fdf8f0; }
           <option value="">All countries</option>
         </select>
       </div>
-      <div style="display:flex;align-items:center;gap:14px;margin-bottom:1rem;font-size:12px;color:var(--text-muted);">
-        <span style="font-weight:500;text-transform:uppercase;letter-spacing:0.05em;">Last site visit:</span>
-        <span style="background:#edf7f1;color:#1a5c35;padding:2px 9px;border-radius:99px;font-weight:500;">Under 2 years</span>
-        <span style="background:#fef9ec;color:#7a4f00;padding:2px 9px;border-radius:99px;font-weight:500;">2–3 years</span>
-        <span style="background:#fdf0f0;color:#8b2020;padding:2px 9px;border-radius:99px;font-weight:500;">4+ years</span>
-      </div>
       <div class="card">
         <div class="table-scroll">
           <table>
@@ -602,7 +596,6 @@ tr:hover td { background: #fdf8f0; }
               <th>Country / City</th>
               <th>Director / Dean</th>
               <th>Enrollment</th>
-              <th>Est.</th>
               <th>Last renewed</th>
               <th>Last site visit</th>
               <th>Status</th>
@@ -830,7 +823,7 @@ tr:hover td { background: #fdf8f0; }
         </div>
         <div class="mini-form" id="visit-form">
           <div class="mini-form-grid">
-            <input type="date" id="vf-date">
+            <input type="month" id="vf-date">
             <input type="text" id="vf-purpose" placeholder="Purpose / type of visit">
             <input type="text" id="vf-attendees" placeholder="Who attended (from our side)">
             <textarea id="vf-notes" placeholder="Visit notes, outcomes, follow-ups…"></textarea>
@@ -862,8 +855,8 @@ tr:hover td { background: #fdf8f0; }
           <div class="mini-form-grid">
             <input type="text" id="gtf-name" placeholder="Name">
             <select id="gtf-type"><option>Guest Teacher</option><option>Intern</option><option>Speaker</option><option>Trainer</option></select>
-            <input type="date" id="gtf-from" placeholder="From date">
-            <input type="date" id="gtf-to" placeholder="To date">
+            <input type="month" id="gtf-from" placeholder="From date">
+            <input type="month" id="gtf-to" placeholder="To date">
             <input type="text" id="gtf-subject" placeholder="Subject / course taught">
             <textarea id="gtf-notes" placeholder="Notes…"></textarea>
           </div>
@@ -914,7 +907,7 @@ tr:hover td { background: #fdf8f0; }
             <input type="email" id="df-email" placeholder="Email">
             <input type="tel" id="df-phone" placeholder="Phone">
             <input type="text" id="df-giving" placeholder="Giving level / amount (e.g. $500/yr)">
-            <input type="date" id="df-since" placeholder="Supporting since">
+            <input type="month" id="df-since" placeholder="Supporting since">
             <textarea id="df-notes" placeholder="Notes (relationship, history, prayer needs)…"></textarea>
           </div>
           <div class="mini-form-actions">
@@ -936,8 +929,8 @@ tr:hover td { background: #fdf8f0; }
           <div class="mini-form-grid">
             <input type="text" id="if-name" placeholder="Initiative name">
             <select id="if-status"><option>Active</option><option>Completed</option><option>Planned</option><option>On Hold</option></select>
-            <input type="date" id="if-start" placeholder="Start date">
-            <input type="date" id="if-end" placeholder="End date (if applicable)">
+            <input type="month" id="if-start" placeholder="Start date">
+            <input type="month" id="if-end" placeholder="End date (if applicable)">
             <textarea id="if-desc" placeholder="Description and goals…"></textarea>
           </div>
           <div class="mini-form-actions">
@@ -958,8 +951,8 @@ tr:hover td { background: #fdf8f0; }
             <div class="form-group"><label>Registration Country</label><input type="text" id="sf-reg-country"></div>
             <div class="form-group"><label>Accrediting Body</label><input type="text" id="sf-accred-body"></div>
             <div class="form-group"><label>Accreditation Level</label><input type="text" id="sf-accred-level" placeholder="e.g. Fully Accredited, Candidate"></div>
-            <div class="form-group"><label>Accreditation Valid Until</label><input type="date" id="sf-accred-expiry"></div>
-            <div class="form-group"><label>Last Audit / Review Date</label><input type="date" id="sf-last-audit"></div>
+            <div class="form-group"><label>Accreditation Valid Until</label><input type="month" id="sf-accred-expiry"></div>
+            <div class="form-group"><label>Last Audit / Review Date</label><input type="month" id="sf-last-audit"></div>
             <div class="form-group full"><label>Additional Certifications / Notes</label><textarea id="sf-accred-notes"></textarea></div>
           </div>
         </div>
@@ -1183,16 +1176,16 @@ function refreshDashboard() {
     ? acts.map(a=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:13px;"><span style="color:var(--text-muted)">${a.date}</span> — ${a.text}</div>`).join('')
     : '<div style="font-size:14px;color:var(--text-muted);font-style:italic;">No activity logged yet.</div>';
   // Upcoming visits
-  const today = new Date().toISOString().split('T')[0];
+  const todayStr = new Date().toISOString().slice(0,7); // YYYY-MM
   const upcoming = [];
   DB.schools.forEach(s => {
     (s.visits||[]).forEach(v => {
-      if (v.date >= today) upcoming.push({school: s.name, ...v});
+      if (v.date && v.date >= todayStr) upcoming.push({school: s.name, ...v});
     });
   });
   upcoming.sort((a,b)=>a.date.localeCompare(b.date));
   document.getElementById('dash-visits').innerHTML = upcoming.slice(0,5).length
-    ? upcoming.slice(0,5).map(v=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:13px;"><strong style="color:var(--navy)">${v.date}</strong> — ${v.school}: ${v.purpose||'Site visit'}</div>`).join('')
+    ? upcoming.slice(0,5).map(v=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:13px;"><strong style="color:var(--navy)">${fmtMonth(v.date)}</strong> — ${v.school}: ${v.purpose||'Site visit'}</div>`).join('')
     : '<div style="font-size:14px;color:var(--text-muted);font-style:italic;">No upcoming visits scheduled.</div>';
 }
 
@@ -1202,8 +1195,18 @@ function logActivity(text) {
   if (DB.activity.length > 50) DB.activity = DB.activity.slice(-50);
 }
 
+function fmtMonth(val) {
+  if (!val) return '';
+  const [y, m] = val.split('-');
+  if (!y || !m) return val;
+  const name = ['January','February','March','April','May','June','July','August','September','October','November','December'][parseInt(m)-1];
+  return `${name} ${y}`;
+}
+
 function timeElapsed(dateStr) {
-  const past = new Date(dateStr);
+  if (!dateStr) return '—';
+  const normalized = dateStr.length === 7 ? dateStr + '-01' : dateStr;
+  const past = new Date(normalized);
   const now = new Date();
   let years = now.getFullYear() - past.getFullYear();
   let months = now.getMonth() - past.getMonth();
@@ -1248,7 +1251,6 @@ function renderPartners() {
       <td>${[s.country,s.city].filter(Boolean).join(', ')||'—'}</td>
       <td>${s.directorName||'—'}</td>
       <td>${s.enrollment!=null&&s.enrollment!==''?parseInt(s.enrollment).toLocaleString():'—'}</td>
-      <td>${s.estYear||'—'}</td>
       <td>${s.renewedYear||'—'}</td>
       <td>${lastVisitDisplay}</td>
       <td>${statusBadge(s.status)}</td>
@@ -1257,7 +1259,7 @@ function renderPartners() {
         <button class="btn-icon danger" title="Delete" onclick="deleteSchool('${s.id}')">🗑</button>
       </td>
     </tr>
-  `}).join('') : `<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-muted);font-style:italic;">No schools found.</td></tr>`;
+  `}).join('') : `<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);font-style:italic;">No schools found.</td></tr>`;
 
   // stats
   const active = DB.schools.filter(s=>s.status==='Active').length;
@@ -1549,7 +1551,7 @@ function renderVisitsList() {
   c.innerHTML='<div class="list-card">'+sorted.map(v=>`
     <div class="list-item">
       <div class="list-item-main">
-        <div class="list-item-title">${v.date||'No date'} — ${esc(v.purpose||'Site Visit')}</div>
+        <div class="list-item-title">${fmtMonth(v.date)||'No date'} — ${esc(v.purpose||'Site Visit')}</div>
         ${v.attendees?`<div class="list-item-sub">Attendees: ${esc(v.attendees)}</div>`:''}
         ${v.notes?`<div class="list-item-sub" style="margin-top:4px;">${esc(v.notes)}</div>`:''}
       </div>
@@ -1664,7 +1666,7 @@ function renderGTList(){
       ${g.photo?`<img src="${g.photo}" class="person-avatar">`:`<div class="person-avatar-placeholder">👤</div>`}
       <div class="list-item-main">
         <div class="list-item-title">${esc(g.name)} ${gtTypeBadge(g.type)}</div>
-        <div class="list-item-sub">${[g.from,g.to].filter(Boolean).join(' – ')}${g.subject?' · '+esc(g.subject):''}</div>
+        <div class="list-item-sub">${[fmtMonth(g.from),fmtMonth(g.to)].filter(Boolean).join(' – ')}${g.subject?' · '+esc(g.subject):''}</div>
         ${g.notes?`<div class="list-item-sub" style="margin-top:3px;">${esc(g.notes)}</div>`:''}
       </div>
       <div class="list-actions">
@@ -1753,7 +1755,7 @@ function renderInitiativesList(){
     <div class="list-item">
       <div class="list-item-main">
         <div class="list-item-title">${esc(it.name)} <span class="badge badge-${it.status==='Active'?'active':it.status==='Completed'?'inactive':'prospect'}" style="font-size:11px;">${it.status}</span></div>
-        <div class="list-item-sub">${[it.start,it.end].filter(Boolean).join(' – ')}</div>
+        <div class="list-item-sub">${[fmtMonth(it.start),fmtMonth(it.end)].filter(Boolean).join(' – ')}</div>
         ${it.desc?`<div class="list-item-sub" style="margin-top:3px;">${esc(it.desc)}</div>`:''}
       </div>
       <div class="list-actions">
@@ -1850,7 +1852,7 @@ function renderDonorList(){
       <div class="list-item-main">
         <div class="list-item-title">${esc(d.name)} <span class="badge badge-${typeColors[d.type]||'prospect'}" style="font-size:11px;">${d.type}</span></div>
         <div class="list-item-sub">${[d.contact,d.email,d.phone].filter(Boolean).join(' · ')||''}</div>
-        ${d.giving?`<div class="list-item-sub">Giving: ${esc(d.giving)}${d.since?' · Since '+d.since:''}</div>`:(d.since?`<div class="list-item-sub">Since: ${d.since}</div>`:'')}
+        ${d.giving?`<div class="list-item-sub">Giving: ${esc(d.giving)}${d.since?' · Since '+fmtMonth(d.since):''}</div>`:(d.since?`<div class="list-item-sub">Since: ${fmtMonth(d.since)}</div>`:'')}
         ${d.notes?`<div class="list-item-sub" style="margin-top:3px;">${esc(d.notes)}</div>`:''}
       </div>
       <div class="list-actions">
