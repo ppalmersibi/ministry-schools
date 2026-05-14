@@ -1161,6 +1161,18 @@ function logActivity(text) {
   if (DB.activity.length > 50) DB.activity = DB.activity.slice(-50);
 }
 
+function timeElapsed(dateStr) {
+  const past = new Date(dateStr);
+  const now = new Date();
+  let years = now.getFullYear() - past.getFullYear();
+  let months = now.getMonth() - past.getMonth();
+  if (months < 0) { years--; months += 12; }
+  if (years === 0 && months === 0) return 'This month';
+  const yPart = years > 0 ? `${years}y` : '';
+  const mPart = months > 0 ? `${months}mo` : '';
+  return [yPart, mPart].filter(Boolean).join(' ') + ' ago';
+}
+
 // ── PARTNERS ──
 function populateCountryFilter() {
   const sel = document.getElementById('p-country');
@@ -1183,7 +1195,7 @@ function renderPartners() {
   tbody.innerHTML = list.length ? list.map(s=>{
     const visits = (s.visits||[]).map(v=>v.date).filter(Boolean).sort();
     const lastVisit = visits.length ? visits.at(-1) : null;
-    const lastVisitDisplay = lastVisit ? lastVisit : '—';
+    const lastVisitDisplay = lastVisit ? timeElapsed(lastVisit) : '—';
     return `
     <tr>
       <td><span class="school-name" onclick="openSchoolDetail('${s.id}')">${s.name}</span></td>
