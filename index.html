@@ -297,6 +297,30 @@ tr:hover td { background: #fdf8f0; }
 .badge-contacted { background: #fff0e0; color: #8b4500; }
 .badge-negotiating { background: #f0e8fe; color: #4a1580; }
 .badge-declined { background: var(--danger-light); color: var(--danger); }
+.badge-gt-teacher { background: #e6f4ea; color: #1e6b3a; }
+.badge-gt-intern { background: #fff3e0; color: #8b4500; }
+.badge-gt-speaker { background: #ede7f6; color: #4a1580; }
+.badge-gt-trainer { background: #e3f2fd; color: #0d47a1; }
+
+/* ── PHOTO AVATAR ── */
+.person-avatar {
+  width: 48px; height: 48px; border-radius: 50%;
+  object-fit: cover; border: 2px solid var(--gray-200);
+  flex-shrink: 0;
+}
+.person-avatar-placeholder {
+  width: 48px; height: 48px; border-radius: 50%;
+  background: var(--gray-100); border: 2px solid var(--gray-200);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; flex-shrink: 0; color: var(--gray-400);
+}
+.photo-upload-wrap { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.photo-upload-btn {
+  font-size: 12px; padding: 4px 10px; border-radius: 6px;
+  border: 1px solid var(--gray-200); background: var(--white);
+  cursor: pointer; color: var(--text-muted); font-family: 'DM Sans', sans-serif;
+}
+.photo-upload-btn:hover { border-color: var(--gold); color: var(--navy); }
 
 /* ── SCHOOL DETAIL MODAL ── */
 .overlay {
@@ -573,6 +597,7 @@ tr:hover td { background: #fdf8f0; }
               <th>Director / Dean</th>
               <th>Enrollment</th>
               <th>Partnership est.</th>
+              <th>Last site visit</th>
               <th>Status</th>
               <th></th>
             </tr></thead>
@@ -719,6 +744,17 @@ tr:hover td { background: #fdf8f0; }
         <div class="form-section">
           <div class="form-section-title">Director / Dean</div>
           <div class="form-grid">
+            <div class="form-group full">
+              <label>Photo</label>
+              <div class="photo-upload-wrap">
+                <div id="director-avatar-wrap"><div class="person-avatar-placeholder">👤</div></div>
+                <div>
+                  <button type="button" class="photo-upload-btn" onclick="document.getElementById('director-photo-input').click()">Upload photo</button>
+                  <button type="button" class="photo-upload-btn" onclick="clearPersonPhoto('director')" style="margin-left:4px;">Remove</button>
+                  <input type="file" id="director-photo-input" accept="image/*" style="display:none" onchange="handlePersonPhoto(event,'director')">
+                </div>
+              </div>
+            </div>
             <div class="form-group"><label>Name</label><input type="text" id="sf-director-name"></div>
             <div class="form-group"><label>Title</label><input type="text" id="sf-director-title" placeholder="Director / Dean / Principal"></div>
             <div class="form-group"><label>Email</label><input type="email" id="sf-director-email"></div>
@@ -806,6 +842,14 @@ tr:hover td { background: #fdf8f0; }
           <button class="btn btn-gold btn-sm" onclick="toggleMiniForm('gt-form')">+ Add Record</button>
         </div>
         <div class="mini-form" id="gt-form">
+          <div class="photo-upload-wrap" style="margin-bottom:8px;">
+            <div id="gtf-avatar-wrap"><div class="person-avatar-placeholder">👤</div></div>
+            <div>
+              <button type="button" class="photo-upload-btn" onclick="document.getElementById('gtf-photo-input').click()">Upload photo</button>
+              <button type="button" class="photo-upload-btn" onclick="clearGTPhoto()" style="margin-left:4px;">Remove</button>
+              <input type="file" id="gtf-photo-input" accept="image/*" style="display:none" onchange="handleGTPhoto(event)">
+            </div>
+          </div>
           <div class="mini-form-grid">
             <input type="text" id="gtf-name" placeholder="Name">
             <select id="gtf-type"><option>Guest Teacher</option><option>Intern</option><option>Speaker</option><option>Trainer</option></select>
@@ -1136,20 +1180,25 @@ function renderPartners() {
   });
   const tbody = document.getElementById('partners-tbody');
   if (!tbody) return;
-  tbody.innerHTML = list.length ? list.map(s=>`
+  tbody.innerHTML = list.length ? list.map(s=>{
+    const visits = (s.visits||[]).map(v=>v.date).filter(Boolean).sort();
+    const lastVisit = visits.length ? visits.at(-1) : null;
+    const lastVisitDisplay = lastVisit ? lastVisit : '—';
+    return `
     <tr>
       <td><span class="school-name" onclick="openSchoolDetail('${s.id}')">${s.name}</span></td>
       <td>${[s.country,s.city].filter(Boolean).join(', ')||'—'}</td>
       <td>${s.directorName||'—'}</td>
       <td>${s.enrollment!=null&&s.enrollment!==''?parseInt(s.enrollment).toLocaleString():'—'}</td>
       <td>${s.estYear||'—'}</td>
+      <td>${lastVisitDisplay}</td>
       <td>${statusBadge(s.status)}</td>
       <td style="display:flex;gap:4px;">
         <button class="btn-icon" title="Edit" onclick="openSchoolForm('${s.id}')">✏️</button>
         <button class="btn-icon danger" title="Delete" onclick="deleteSchool('${s.id}')">🗑</button>
       </td>
     </tr>
-  `).join('') : `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted);font-style:italic;">No schools found.</td></tr>`;
+  `}).join('') : `<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);font-style:italic;">No schools found.</td></tr>`;
 
   // stats
   const active = DB.schools.filter(s=>s.status==='Active').length;
@@ -1190,6 +1239,8 @@ function openSchoolForm(id) {
   tempGradCohorts = [];
   tempDonors = [];
   tempLogo = null;
+  tempDirectorPhoto = null;
+  tempGTPhoto = null;
   switchSFTab(0);
 
   if (id) {
@@ -1204,6 +1255,8 @@ function openSchoolForm(id) {
     tempGradCohorts = JSON.parse(JSON.stringify(s.gradCohorts||[]));
     tempDonors = JSON.parse(JSON.stringify(s.donors||[]));
     tempLogo = s.logo||null;
+    tempDirectorPhoto = s.directorPhoto||null;
+    tempGTPhoto = null;
   } else {
     document.getElementById('sf-title').textContent = 'Add Partner School';
     clearSchoolForm();
@@ -1216,6 +1269,9 @@ function openSchoolForm(id) {
   renderGradCohortList();
   renderDonorList();
   updateLogoPreview();
+  // update director avatar
+  const dw = document.getElementById('director-avatar-wrap');
+  if (dw) dw.innerHTML = tempDirectorPhoto ? `<img src="${tempDirectorPhoto}" class="person-avatar">` : `<div class="person-avatar-placeholder">👤</div>`;
   document.getElementById('school-form-overlay').classList.add('open');
 }
 
@@ -1240,6 +1296,10 @@ function clearSchoolForm() {
   document.getElementById('logo-preview').style.display='none';
   document.getElementById('logo-hint').style.display='';
   tempLogo=null;
+  tempDirectorPhoto=null;
+  tempGTPhoto=null;
+  const dw=document.getElementById('director-avatar-wrap');
+  if(dw) dw.innerHTML=`<div class="person-avatar-placeholder">👤</div>`;
 }
 
 function populateSchoolForm(s) {
@@ -1255,6 +1315,9 @@ function populateSchoolForm(s) {
   set('sf-reg-no',s.regNo); set('sf-reg-country',s.regCountry); set('sf-accred-body',s.accredBody);
   set('sf-accred-level',s.accredLevel); set('sf-accred-expiry',s.accredExpiry); set('sf-last-audit',s.lastAudit);
   set('sf-accred-notes',s.accredNotes); set('sf-notes',s.notes);
+  // director photo preview (tempDirectorPhoto already set before this call)
+  const dw = document.getElementById('director-avatar-wrap');
+  if (dw) dw.innerHTML = tempDirectorPhoto ? `<img src="${tempDirectorPhoto}" class="person-avatar">` : `<div class="person-avatar-placeholder">👤</div>`;
 }
 
 function collectSchoolForm() {
@@ -1278,7 +1341,8 @@ function collectSchoolForm() {
     initiatives: JSON.parse(JSON.stringify(tempInitiatives)),
     gradCohorts: JSON.parse(JSON.stringify(tempGradCohorts)),
     donors: JSON.parse(JSON.stringify(tempDonors)),
-    logo: tempLogo
+    logo: tempLogo,
+    directorPhoto: tempDirectorPhoto
   };
 }
 
@@ -1314,6 +1378,16 @@ function renderFacultyList() {
   c.innerHTML = tempFaculty.map((f,i)=>`
     <div class="list-card" style="margin-bottom:10px;">
       <div class="list-item" style="flex-wrap:wrap;gap:8px;">
+        <div class="photo-upload-wrap" style="margin-bottom:0;align-items:flex-start;">
+          <div id="fac-avatar-wrap-${i}">
+            ${f.photo?`<img src="${f.photo}" class="person-avatar">`:`<div class="person-avatar-placeholder">👤</div>`}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <button type="button" class="photo-upload-btn" onclick="document.getElementById('fac-photo-${i}').click()">Photo</button>
+            ${f.photo?`<button type="button" class="photo-upload-btn" onclick="removeFacultyPhoto(${i})">Remove</button>`:''}
+            <input type="file" id="fac-photo-${i}" accept="image/*" style="display:none" onchange="handleFacultyPhoto(event,${i})">
+          </div>
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;flex:1;min-width:0;">
           <input type="text" placeholder="Name" value="${esc(f.name)}" oninput="tempFaculty[${i}].name=this.value" style="padding:6px 9px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;">
           <input type="text" placeholder="Role / Title" value="${esc(f.role)}" oninput="tempFaculty[${i}].role=this.value" style="padding:6px 9px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;">
@@ -1424,16 +1498,82 @@ function renderVisitsList() {
   `).join('')+'</div>';
 }
 
+// ── PHOTO HELPERS ──
+let tempDirectorPhoto = null;
+let tempGTPhoto = null;
+
+function handlePersonPhoto(e, key) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    if (key === 'director') {
+      tempDirectorPhoto = ev.target.result;
+      const wrap = document.getElementById('director-avatar-wrap');
+      if (wrap) wrap.innerHTML = `<img src="${tempDirectorPhoto}" class="person-avatar">`;
+    }
+  };
+  reader.readAsDataURL(file);
+}
+function clearPersonPhoto(key) {
+  if (key === 'director') {
+    tempDirectorPhoto = null;
+    const wrap = document.getElementById('director-avatar-wrap');
+    if (wrap) wrap.innerHTML = `<div class="person-avatar-placeholder">👤</div>`;
+    const inp = document.getElementById('director-photo-input');
+    if (inp) inp.value = '';
+  }
+}
+function handleFacultyPhoto(e, i) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    tempFaculty[i].photo = ev.target.result;
+    const wrap = document.getElementById(`fac-avatar-wrap-${i}`);
+    if (wrap) wrap.innerHTML = `<img src="${ev.target.result}" class="person-avatar">`;
+    renderFacultyList();
+  };
+  reader.readAsDataURL(file);
+}
+function removeFacultyPhoto(i) {
+  tempFaculty[i].photo = null;
+  renderFacultyList();
+}
+function handleGTPhoto(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    tempGTPhoto = ev.target.result;
+    const wrap = document.getElementById('gtf-avatar-wrap');
+    if (wrap) wrap.innerHTML = `<img src="${tempGTPhoto}" class="person-avatar">`;
+  };
+  reader.readAsDataURL(file);
+}
+function clearGTPhoto() {
+  tempGTPhoto = null;
+  const wrap = document.getElementById('gtf-avatar-wrap');
+  if (wrap) wrap.innerHTML = `<div class="person-avatar-placeholder">👤</div>`;
+  const inp = document.getElementById('gtf-photo-input');
+  if (inp) inp.value = '';
+}
+
+function gtTypeBadge(type) {
+  const map = {'Guest Teacher':'gt-teacher','Intern':'gt-intern','Speaker':'gt-speaker','Trainer':'gt-trainer'};
+  return `<span class="badge badge-${map[type]||'gt-teacher'}" style="font-size:11px;">${type}</span>`;
+}
+
 // ── GUEST TEACHERS ──
 function addGuestTeacher() {
   const id=document.getElementById('gtf-editing-id').value;
-  const g={id:id||'g'+Date.now(),name:document.getElementById('gtf-name').value.trim(),type:document.getElementById('gtf-type').value,from:document.getElementById('gtf-from').value,to:document.getElementById('gtf-to').value,subject:document.getElementById('gtf-subject').value.trim(),notes:document.getElementById('gtf-notes').value.trim()};
+  const g={id:id||'g'+Date.now(),name:document.getElementById('gtf-name').value.trim(),type:document.getElementById('gtf-type').value,from:document.getElementById('gtf-from').value,to:document.getElementById('gtf-to').value,subject:document.getElementById('gtf-subject').value.trim(),notes:document.getElementById('gtf-notes').value.trim(),photo:tempGTPhoto};
   if(!g.name) return;
   if(id){const i=tempGuestTeachers.findIndex(x=>x.id===id);tempGuestTeachers[i]=g;}
   else tempGuestTeachers.push(g);
   ['gtf-name','gtf-from','gtf-to','gtf-subject','gtf-notes','gtf-editing-id'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('gtf-type').value='Guest Teacher';
   document.getElementById('gtf-save-btn').textContent='Save';
+  tempGTPhoto=null;
+  const wrap=document.getElementById('gtf-avatar-wrap');
+  if(wrap) wrap.innerHTML=`<div class="person-avatar-placeholder">👤</div>`;
   document.getElementById('gt-form').classList.remove('open');
   renderGTList();
 }
@@ -1447,6 +1587,9 @@ function editGT(id){
   document.getElementById('gtf-notes').value=g.notes||'';
   document.getElementById('gtf-editing-id').value=id;
   document.getElementById('gtf-save-btn').textContent='Update';
+  tempGTPhoto=g.photo||null;
+  const wrap=document.getElementById('gtf-avatar-wrap');
+  if(wrap) wrap.innerHTML=tempGTPhoto?`<img src="${tempGTPhoto}" class="person-avatar">`:`<div class="person-avatar-placeholder">👤</div>`;
   document.getElementById('gt-form').classList.add('open');
 }
 function removeGT(id){tempGuestTeachers=tempGuestTeachers.filter(g=>g.id!==id);renderGTList();}
@@ -1455,8 +1598,9 @@ function renderGTList(){
   if(!tempGuestTeachers.length){c.innerHTML='<div class="list-empty">No guest teachers or interns recorded.</div>';return;}
   c.innerHTML='<div class="list-card">'+tempGuestTeachers.map(g=>`
     <div class="list-item">
+      ${g.photo?`<img src="${g.photo}" class="person-avatar">`:`<div class="person-avatar-placeholder">👤</div>`}
       <div class="list-item-main">
-        <div class="list-item-title">${esc(g.name)} <span class="badge badge-prospect" style="font-size:11px;">${g.type}</span></div>
+        <div class="list-item-title">${esc(g.name)} ${gtTypeBadge(g.type)}</div>
         <div class="list-item-sub">${[g.from,g.to].filter(Boolean).join(' – ')}${g.subject?' · '+esc(g.subject):''}</div>
         ${g.notes?`<div class="list-item-sub" style="margin-top:3px;">${esc(g.notes)}</div>`:''}
       </div>
