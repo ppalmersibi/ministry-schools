@@ -588,6 +588,12 @@ tr:hover td { background: #fdf8f0; }
           <option value="">All countries</option>
         </select>
       </div>
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:1rem;font-size:12px;color:var(--text-muted);">
+        <span style="font-weight:500;text-transform:uppercase;letter-spacing:0.05em;">Last site visit:</span>
+        <span style="background:#edf7f1;color:#1a5c35;padding:2px 9px;border-radius:99px;font-weight:500;">Under 2 years</span>
+        <span style="background:#fef9ec;color:#7a4f00;padding:2px 9px;border-radius:99px;font-weight:500;">2–3 years</span>
+        <span style="background:#fdf0f0;color:#8b2020;padding:2px 9px;border-radius:99px;font-weight:500;">4+ years</span>
+      </div>
       <div class="card">
         <div class="table-scroll">
           <table>
@@ -596,7 +602,8 @@ tr:hover td { background: #fdf8f0; }
               <th>Country / City</th>
               <th>Director / Dean</th>
               <th>Enrollment</th>
-              <th>Partnership est.</th>
+              <th>Est.</th>
+              <th>Last renewed</th>
               <th>Last site visit</th>
               <th>Status</th>
               <th></th>
@@ -705,7 +712,8 @@ tr:hover td { background: #fdf8f0; }
       <button class="dtab" onclick="switchSFTab(6)">Supporters & Donors</button>
       <button class="dtab" onclick="switchSFTab(7)">Initiatives & Programs</button>
       <button class="dtab" onclick="switchSFTab(8)">Accreditation</button>
-      <button class="dtab" onclick="switchSFTab(9)">Notes & Logo</button>
+      <button class="dtab" onclick="switchSFTab(9)">Churches Planted</button>
+      <button class="dtab" onclick="switchSFTab(10)">Notes & Logo</button>
     </div>
     <div class="drawer-body">
 
@@ -721,7 +729,8 @@ tr:hover td { background: #fdf8f0; }
                 <option>Active</option><option>Inactive</option><option>Paused</option>
               </select>
             </div>
-            <div class="form-group"><label>Partnership Established Year</label><input type="number" id="sf-est-year" placeholder="2019" min="1900" max="2099"></div>
+            <div class="form-group"><label>Partnership Originally Established</label><input type="number" id="sf-est-year" placeholder="2019" min="1900" max="2099"></div>
+            <div class="form-group"><label>Partnership Last Renewed</label><input type="number" id="sf-renewed-year" placeholder="2024" min="1900" max="2099"></div>
             <div class="form-group"><label>Website</label><input type="url" id="sf-website" placeholder="https://"></div>
           </div>
         </div>
@@ -956,8 +965,31 @@ tr:hover td { background: #fdf8f0; }
         </div>
       </div>
 
-      <!-- TAB 9: Notes & Logo -->
+      <!-- TAB 9: Churches Planted -->
       <div class="dtab-content" id="sf-tab-9">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+          <div style="font-size:14px;color:var(--text-muted);">Churches planted by graduates of this school (tracked from Aug 2020)</div>
+          <button class="btn btn-gold btn-sm" onclick="toggleMiniForm('church-form')">+ Add Church</button>
+        </div>
+        <div class="mini-form" id="church-form">
+          <div class="mini-form-grid">
+            <input type="text" id="cf-name" placeholder="Church name">
+            <input type="text" id="cf-planter" placeholder="Planted by (graduate name)">
+            <input type="number" id="cf-year" placeholder="Year planted (e.g. 2022)" min="2020" max="2099">
+            <input type="text" id="cf-location" placeholder="City / Country">
+            <textarea id="cf-notes" placeholder="Notes…"></textarea>
+          </div>
+          <div class="mini-form-actions">
+            <button class="btn btn-ghost btn-sm" onclick="closeMiniForm('church-form')">Cancel</button>
+            <button class="btn btn-primary btn-sm" id="cf-save-btn" onclick="addChurch()">Save</button>
+          </div>
+        </div>
+        <input type="hidden" id="cf-editing-id">
+        <div id="church-list"></div>
+      </div>
+
+      <!-- TAB 10: Notes & Logo -->
+      <div class="dtab-content" id="sf-tab-10">
         <div class="form-section">
           <div class="form-section-title">School Logo</div>
           <div class="logo-area" onclick="document.getElementById('logo-input').click()">
@@ -1052,6 +1084,7 @@ let tempFinancials = [];
 let tempInitiatives = [];
 let tempGradCohorts = [];
 let tempDonors = [];
+let tempChurches = [];
 let tempLogo = null;
 
 // ── PERSISTENCE ──
@@ -1130,11 +1163,19 @@ function refreshDashboard() {
   const totalGiving = DB.schools.reduce((sum,s)=>{
     return sum + (s.financials||[]).reduce((a,f)=>a+(parseFloat(f.amount)||0),0);
   }, 0);
+  const totalGrads = DB.schools.reduce((sum,s)=>{
+    return sum + (s.gradCohorts||[]).filter(c=>c.year && (parseInt(c.year)>2020 || (parseInt(c.year)===2020))).reduce((a,c)=>a+(parseInt(c.count)||0),0);
+  }, 0);
+  const totalChurches = DB.schools.reduce((sum,s)=>{
+    return sum + (s.churches||[]).filter(c=>c.year && (parseInt(c.year)>2020 || (parseInt(c.year)===2020))).length;
+  }, 0);
   document.getElementById('dash-stats').innerHTML = `
     <div class="stat-card"><div class="stat-label">Partner Schools</div><div class="stat-val">${total}</div></div>
     <div class="stat-card"><div class="stat-label">Active</div><div class="stat-val">${active}</div></div>
     <div class="stat-card"><div class="stat-label">Prospects</div><div class="stat-val">${prospects}</div></div>
     <div class="stat-card"><div class="stat-label">Total Giving</div><div class="stat-val gold">$${totalGiving.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</div></div>
+    <div class="stat-card"><div class="stat-label">Graduated (since Aug 2020)</div><div class="stat-val">${totalGrads.toLocaleString()}</div></div>
+    <div class="stat-card"><div class="stat-label">Churches Planted (since Aug 2020)</div><div class="stat-val">${totalChurches}</div></div>
   `;
   // Recent activity
   const acts = (DB.activity||[]).slice(-5).reverse();
@@ -1167,10 +1208,15 @@ function timeElapsed(dateStr) {
   let years = now.getFullYear() - past.getFullYear();
   let months = now.getMonth() - past.getMonth();
   if (months < 0) { years--; months += 12; }
-  if (years === 0 && months === 0) return 'This month';
-  const yPart = years > 0 ? `${years}y` : '';
-  const mPart = months > 0 ? `${months}mo` : '';
-  return [yPart, mPart].filter(Boolean).join(' ') + ' ago';
+  const totalMonths = years * 12 + months;
+  const label = (years === 0 && months === 0) ? 'This month'
+    : [years > 0 ? `${years}y` : '', months > 0 ? `${months}mo` : ''].filter(Boolean).join(' ') + ' ago';
+  const color = totalMonths < 24
+    ? 'background:#edf7f1;color:#1a5c35;'
+    : totalMonths < 48
+    ? 'background:#fef9ec;color:#7a4f00;'
+    : 'background:#fdf0f0;color:#8b2020;';
+  return `<span style="${color}padding:2px 9px;border-radius:99px;font-size:12px;font-weight:500;white-space:nowrap;">${label}</span>`;
 }
 
 // ── PARTNERS ──
@@ -1203,6 +1249,7 @@ function renderPartners() {
       <td>${s.directorName||'—'}</td>
       <td>${s.enrollment!=null&&s.enrollment!==''?parseInt(s.enrollment).toLocaleString():'—'}</td>
       <td>${s.estYear||'—'}</td>
+      <td>${s.renewedYear||'—'}</td>
       <td>${lastVisitDisplay}</td>
       <td>${statusBadge(s.status)}</td>
       <td style="display:flex;gap:4px;">
@@ -1210,20 +1257,17 @@ function renderPartners() {
         <button class="btn-icon danger" title="Delete" onclick="deleteSchool('${s.id}')">🗑</button>
       </td>
     </tr>
-  `}).join('') : `<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);font-style:italic;">No schools found.</td></tr>`;
+  `}).join('') : `<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-muted);font-style:italic;">No schools found.</td></tr>`;
 
   // stats
   const active = DB.schools.filter(s=>s.status==='Active').length;
   const countries = new Set(DB.schools.map(s=>s.country).filter(Boolean)).size;
   const totalEnroll = DB.schools.reduce((a,s)=>a+(parseInt(s.enrollment)||0),0);
-  const allVisitDates = DB.schools.flatMap(s=>(s.visits||[]).map(v=>v.date)).filter(Boolean);
-  const lastVisitYear = allVisitDates.length ? allVisitDates.sort().at(-1).slice(0,4) : '—';
   document.getElementById('partner-stats').innerHTML = `
     <div class="stat-card"><div class="stat-label">Total Schools</div><div class="stat-val">${DB.schools.length}</div></div>
     <div class="stat-card"><div class="stat-label">Active</div><div class="stat-val">${active}</div></div>
     <div class="stat-card"><div class="stat-label">Countries</div><div class="stat-val">${countries}</div></div>
     <div class="stat-card"><div class="stat-label">Total Enrollment</div><div class="stat-val">${totalEnroll.toLocaleString()}</div></div>
-    <div class="stat-card"><div class="stat-label">Last Site Visit</div><div class="stat-val">${lastVisitYear}</div></div>
   `;
 }
 
@@ -1250,6 +1294,7 @@ function openSchoolForm(id) {
   tempInitiatives = [];
   tempGradCohorts = [];
   tempDonors = [];
+  tempChurches = [];
   tempLogo = null;
   tempDirectorPhoto = null;
   tempGTPhoto = null;
@@ -1266,6 +1311,7 @@ function openSchoolForm(id) {
     tempInitiatives = JSON.parse(JSON.stringify(s.initiatives||[]));
     tempGradCohorts = JSON.parse(JSON.stringify(s.gradCohorts||[]));
     tempDonors = JSON.parse(JSON.stringify(s.donors||[]));
+    tempChurches = JSON.parse(JSON.stringify(s.churches||[]));
     tempLogo = s.logo||null;
     tempDirectorPhoto = s.directorPhoto||null;
     tempGTPhoto = null;
@@ -1280,6 +1326,7 @@ function openSchoolForm(id) {
   renderInitiativesList();
   renderGradCohortList();
   renderDonorList();
+  renderChurchList();
   updateLogoPreview();
   // update director avatar
   const dw = document.getElementById('director-avatar-wrap');
@@ -1303,7 +1350,7 @@ function clearSchoolForm() {
    'sf-director-name','sf-director-title','sf-director-email','sf-director-phone','sf-director-bio',
    'sf-enrollment','sf-ft','sf-pt','sf-grads','sf-programs','sf-enroll-year','sf-fac-count','sf-admin-count','sf-founded',
    'sf-reg-no','sf-reg-country','sf-accred-body','sf-accred-level','sf-accred-expiry','sf-last-audit','sf-accred-notes',
-   'sf-notes','sf-est-year'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+   'sf-notes','sf-est-year','sf-renewed-year'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   document.getElementById('sf-status').value='Active';
   document.getElementById('logo-preview').style.display='none';
   document.getElementById('logo-hint').style.display='';
@@ -1316,7 +1363,7 @@ function clearSchoolForm() {
 
 function populateSchoolForm(s) {
   const set = (id,val) => { const el=document.getElementById(id); if(el&&val!=null) el.value=val; };
-  set('sf-name',s.name); set('sf-overseeing-church',s.overseeingChurch); set('sf-status',s.status); set('sf-est-year',s.estYear);
+  set('sf-name',s.name); set('sf-overseeing-church',s.overseeingChurch); set('sf-status',s.status); set('sf-est-year',s.estYear); set('sf-renewed-year',s.renewedYear);
   set('sf-website',s.website); set('sf-address',s.address); set('sf-city',s.city); set('sf-state',s.state);
   set('sf-zip',s.zip); set('sf-country',s.country); set('sf-phone',s.phone); set('sf-email',s.email);
   set('sf-director-name',s.directorName); set('sf-director-title',s.directorTitle);
@@ -1335,7 +1382,7 @@ function populateSchoolForm(s) {
 function collectSchoolForm() {
   const g = id => { const el=document.getElementById(id); return el?el.value.trim():''; };
   return {
-    name:g('sf-name'), overseeingChurch:g('sf-overseeing-church'), status:g('sf-status'), estYear:g('sf-est-year'),
+    name:g('sf-name'), overseeingChurch:g('sf-overseeing-church'), status:g('sf-status'), estYear:g('sf-est-year'), renewedYear:g('sf-renewed-year'),
     website:g('sf-website'), address:g('sf-address'), city:g('sf-city'), state:g('sf-state'),
     zip:g('sf-zip'), country:g('sf-country'), phone:g('sf-phone'), email:g('sf-email'),
     directorName:g('sf-director-name'), directorTitle:g('sf-director-title'),
@@ -1353,6 +1400,7 @@ function collectSchoolForm() {
     initiatives: JSON.parse(JSON.stringify(tempInitiatives)),
     gradCohorts: JSON.parse(JSON.stringify(tempGradCohorts)),
     donors: JSON.parse(JSON.stringify(tempDonors)),
+    churches: JSON.parse(JSON.stringify(tempChurches)),
     logo: tempLogo,
     directorPhoto: tempDirectorPhoto
   };
@@ -1420,18 +1468,21 @@ const MINI_FORM_FIELDS = {
   'donor-form':  ['df-name','df-contact','df-email','df-phone','df-giving','df-since','df-notes'],
   'init-form':   ['if-name','if-start','if-end','if-desc'],
   'grad-form':   ['grf-year','grf-count','grf-program','grf-notes'],
+  'church-form': ['cf-name','cf-planter','cf-year','cf-location','cf-notes'],
 };
 const MINI_FORM_EDIT_IDS = {
   'visit-form':'vf-editing-id','gt-form':'gtf-editing-id','fin-form':'ff-editing-id',
-  'donor-form':'df-editing-id','init-form':'if-editing-id','grad-form':'grf-editing-id'
+  'donor-form':'df-editing-id','init-form':'if-editing-id','grad-form':'grf-editing-id',
+  'church-form':'cf-editing-id'
 };
 const MINI_FORM_BTN_IDS = {
   'visit-form':'vf-save-btn','gt-form':'gtf-save-btn','fin-form':'ff-save-btn',
-  'donor-form':'df-save-btn','init-form':'if-save-btn','grad-form':'grf-save-btn'
+  'donor-form':'df-save-btn','init-form':'if-save-btn','grad-form':'grf-save-btn',
+  'church-form':'cf-save-btn'
 };
 const MINI_FORM_BTN_LABELS = {
   'visit-form':'Save Visit','gt-form':'Save','fin-form':'Save',
-  'donor-form':'Save','init-form':'Save','grad-form':'Save Cohort'
+  'donor-form':'Save','init-form':'Save','grad-form':'Save Cohort','church-form':'Save'
 };
 
 function miniFormIsDirty(id) {
@@ -1805,6 +1856,53 @@ function renderDonorList(){
       <div class="list-actions">
         <button class="btn-icon" title="Edit" onclick="editDonor('${d.id}')">✏️</button>
         <button class="btn-icon danger" onclick="removeDonor('${d.id}')">🗑</button>
+      </div>
+    </div>
+  `).join('')+'</div>';
+}
+
+// ── CHURCHES PLANTED ──
+function addChurch(){
+  const id=document.getElementById('cf-editing-id').value;
+  const c={id:id||'ch'+Date.now(),name:document.getElementById('cf-name').value.trim(),planter:document.getElementById('cf-planter').value.trim(),year:document.getElementById('cf-year').value,location:document.getElementById('cf-location').value.trim(),notes:document.getElementById('cf-notes').value.trim()};
+  if(!c.name&&!c.planter) return;
+  if(id){const i=tempChurches.findIndex(x=>x.id===id);tempChurches[i]=c;}
+  else tempChurches.push(c);
+  ['cf-name','cf-planter','cf-year','cf-location','cf-notes','cf-editing-id'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('cf-save-btn').textContent='Save';
+  document.getElementById('church-form').classList.remove('open');
+  renderChurchList();
+}
+function editChurch(id){
+  const c=tempChurches.find(x=>x.id===id);if(!c)return;
+  document.getElementById('cf-name').value=c.name||'';
+  document.getElementById('cf-planter').value=c.planter||'';
+  document.getElementById('cf-year').value=c.year||'';
+  document.getElementById('cf-location').value=c.location||'';
+  document.getElementById('cf-notes').value=c.notes||'';
+  document.getElementById('cf-editing-id').value=id;
+  document.getElementById('cf-save-btn').textContent='Update';
+  document.getElementById('church-form').classList.add('open');
+}
+function removeChurch(id){tempChurches=tempChurches.filter(c=>c.id!==id);renderChurchList();}
+function renderChurchList(){
+  const el=document.getElementById('church-list');if(!el)return;
+  if(!tempChurches.length){el.innerHTML='<div class="list-empty">No churches recorded. Tracking from Aug 2020.</div>';return;}
+  const sorted=[...tempChurches].sort((a,b)=>(b.year||0)-(a.year||0));
+  el.innerHTML=`<div style="margin-bottom:10px;padding:10px 14px;background:var(--gray-100);border-radius:var(--radius);font-size:13px;display:flex;gap:1.5rem;">
+    <span><strong>${sorted.length}</strong> church${sorted.length===1?'':'es'} planted</span>
+    <span style="color:var(--text-muted);">Tracked from Aug 2020</span>
+  </div>
+  <div class="list-card">`+sorted.map(c=>`
+    <div class="list-item">
+      <div class="list-item-main">
+        <div class="list-item-title">⛪ ${esc(c.name||'Unnamed church')}${c.year?' <span style="font-size:12px;color:var(--text-muted);">('+c.year+')</span>':''}</div>
+        <div class="list-item-sub">${[c.planter?'Planted by: '+esc(c.planter):'',c.location?esc(c.location):''].filter(Boolean).join(' · ')}</div>
+        ${c.notes?`<div class="list-item-sub" style="margin-top:3px;">${esc(c.notes)}</div>`:''}
+      </div>
+      <div class="list-actions">
+        <button class="btn-icon" title="Edit" onclick="editChurch('${c.id}')">✏️</button>
+        <button class="btn-icon danger" onclick="removeChurch('${c.id}')">🗑</button>
       </div>
     </div>
   `).join('')+'</div>';
