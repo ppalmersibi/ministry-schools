@@ -1176,7 +1176,8 @@ function refreshDashboard() {
     ? acts.map(a=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:13px;"><span style="color:var(--text-muted)">${a.date}</span> — ${a.text}</div>`).join('')
     : '<div style="font-size:14px;color:var(--text-muted);font-style:italic;">No activity logged yet.</div>';
   // Upcoming visits
-  const todayStr = new Date().toISOString().slice(0,7); // YYYY-MM
+  const nowLocal = new Date();
+  const todayStr = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth()+1).padStart(2,'0')}`;
   const upcoming = [];
   DB.schools.forEach(s => {
     (s.visits||[]).forEach(v => {
@@ -1208,6 +1209,9 @@ function timeElapsed(dateStr) {
   const normalized = dateStr.length === 7 ? dateStr + '-01' : dateStr;
   const past = new Date(normalized);
   const now = new Date();
+  if (past > now) {
+    return `<span style="background:#e8f0fe;color:#1a3a7a;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:500;white-space:nowrap;">Upcoming</span>`;
+  }
   let years = now.getFullYear() - past.getFullYear();
   let months = now.getMonth() - past.getMonth();
   if (months < 0) { years--; months += 12; }
@@ -1242,7 +1246,9 @@ function renderPartners() {
   const tbody = document.getElementById('partners-tbody');
   if (!tbody) return;
   tbody.innerHTML = list.length ? list.map(s=>{
-    const visits = (s.visits||[]).map(v=>v.date).filter(Boolean).sort();
+    const now = new Date();
+    const todayMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    const visits = (s.visits||[]).map(v=>v.date).filter(d=>d && d <= todayMonth).sort();
     const lastVisit = visits.length ? visits.at(-1) : null;
     const lastVisitDisplay = lastVisit ? timeElapsed(lastVisit) : '—';
     return `
