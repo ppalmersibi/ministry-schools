@@ -2054,28 +2054,19 @@ function renderAnnualReportList(){
 }
 
 // ── GOOGLE SHEETS SYNC ──
-const SHEETS_API_KEY = 'AIzaSyBRczfvEjQ2XrsM7WvwDyLB4EQfExewzWg';
-const SHEETS_ID = '1Uq5pyl5TCDktFpeM3W-amAgmJ41yEcVB2DtptHWH88s';
-const SHEET_TAB = 'Form Responses 1';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyr8ccu80tDElo0ibukk5eyGVwKAgpGVr7_QlTrGH8BxMQGx9dXTd4kUN5_l6EIx-uQow/exec';
 
 async function syncFromSheets() {
   const statusEl = document.getElementById('sync-status');
   statusEl.textContent = 'Connecting…';
   statusEl.style.color = 'var(--text-muted)';
   try {
-    const range = encodeURIComponent(`'${SHEET_TAB}'!A1:W1000`);
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/${range}?key=${SHEETS_API_KEY}`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error?.message || 'API error');
-    }
-    const data = await res.json();
-    const rows = data.values || [];
-    if (rows.length < 2) { statusEl.textContent = 'No responses found in sheet.'; return; }
+    const res = await fetch(APPS_SCRIPT_URL);
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    const json = await res.json();
+    const rows = json.data || [];
+    if (!rows.length) { statusEl.textContent = 'No responses found in sheet.'; return; }
 
-    const headers = rows[0].map(h => h.trim());
-    // Map exact column headers from the sheet
     const colMap = {
       'Timestamp': 'timestamp',
       'Email Address': 'email',
@@ -2103,28 +2094,27 @@ async function syncFromSheets() {
     };
 
     let imported = 0, skipped = 0, noMatch = [];
-    for (let i = 1; i < rows.length; i++) {
+    rows.forEach((rawRow, i) => {
       const row = {};
-      headers.forEach((h, idx) => {
-        const key = colMap[h];
-        if (key) row[key] = (rows[i][idx] || '').trim();
+      Object.entries(colMap).forEach(([col, key]) => {
+        row[key] = (rawRow[col] || '').toString().trim();
       });
-      if (!row.school || !row.year) { skipped++; continue; }
+      if (!row.school || !row.year) { skipped++; return; }
       const school = DB.schools.find(s => s.name.trim().toLowerCase() === row.school.trim().toLowerCase());
-      if (!school) { noMatch.push(row.school); skipped++; continue; }
+      if (!school) { noMatch.push(row.school); skipped++; return; }
       if (!school.annualReports) school.annualReports = [];
       const existingIdx = school.annualReports.findIndex(r => String(r.year) === String(row.year));
       const report = { id: 'ar' + Date.now() + i, ...row };
       if (existingIdx >= 0) { school.annualReports[existingIdx] = report; }
       else { school.annualReports.push(report); }
       imported++;
-    }
+    });
     save();
     logActivity(`Synced ${imported} annual report(s) from Google Sheets`);
     refreshAll();
-    let msg = `✅ ${imported} report(s) synced successfully.`;
-    if (skipped) msg += ` ${skipped} row(s) skipped.`;
-    if (noMatch.length) msg += ` No match: ${[...new Set(noMatch)].join(', ')}`;
+    let msg = `✅ ${imported} report(s) synced.`;
+    if (skipped) msg += ` ${skipped} skipped.`;
+    if (noMatch.length) msg += ` No match found for: ${[...new Set(noMatch)].join(', ')}`;
     statusEl.style.color = imported > 0 ? 'var(--success)' : 'var(--warn)';
     statusEl.textContent = msg;
   } catch(err) {
