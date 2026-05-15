@@ -677,12 +677,17 @@ tr:hover td { background: #fdf8f0; }
         <div style="margin-top:10px;font-size:13px;color:var(--text-muted);">Data is stored locally in your browser. Export regularly to keep a backup.</div>
 
         <div style="border-top:1px solid var(--gray-200);margin:1.75rem 0;"></div>
-        <div style="font-size:13px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:1rem;">Import Annual Reports from Google Forms</div>
-        <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">
-          Export your Google Form responses as a CSV from Google Sheets (File → Download → CSV), then import here. School names must match exactly.
+        <div style="font-size:13px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:0.5rem;">Annual Reports — Google Sheets Sync</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
+          Pulls the latest form responses directly from your linked Google Sheet and saves them into each school's Annual Reports tab. Run this any time after schools submit the form.
         </div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;">
-          <button class="btn btn-gold" onclick="document.getElementById('ar-csv-file').click()">⬆ Import Annual Report CSV</button>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <button class="btn btn-gold" onclick="syncFromSheets()">🔄 Sync from Google Sheets</button>
+          <span id="sync-status" style="font-size:13px;color:var(--text-muted);"></span>
+        </div>
+        <div style="margin-top:10px;font-size:12px;color:var(--gray-400);">Also still works: export CSV from Google Sheets and import below.</div>
+        <div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('ar-csv-file').click()">⬆ Import CSV (manual)</button>
           <input type="file" id="ar-csv-file" accept=".csv" style="display:none" onchange="importAnnualReportCSV(event)">
         </div>
 
@@ -2024,7 +2029,7 @@ function editAnnualReport(id){
 function removeAnnualReport(id){tempAnnualReports=tempAnnualReports.filter(r=>r.id!==id);renderAnnualReportList();}
 function renderAnnualReportList(){
   const el=document.getElementById('ar-list');if(!el)return;
-  if(!tempAnnualReports.length){el.innerHTML='<div class="list-empty">No annual reports yet. Import from CSV or add manually.</div>';return;}
+  if(!tempAnnualReports.length){el.innerHTML='<div class="list-empty">No annual reports yet. Use "Sync from Google Sheets" in Settings, or add one manually above.</div>';return;}
   const sorted=[...tempAnnualReports].sort((a,b)=>b.year-a.year);
   el.innerHTML='<div class="list-card">'+sorted.map(r=>`
     <div class="list-item" style="flex-direction:column;align-items:stretch;gap:10px;">
@@ -2046,6 +2051,87 @@ function renderAnnualReportList(){
       ${[{l:'Placements',v:r.placements},{l:'Outreach',v:r.outreach},{l:'Programs',v:r.programs},{l:'Facility Changes',v:r.facility},{l:'New Locations',v:r.locations},{l:'New Supporters',v:r.newSupporters},{l:'Discontinued Supporters',v:r.discontinuedSupporters},{l:'Leadership Changes',v:r.leadershipChanged==='Yes'?(r.leadershipDetails||'Yes'):''},{l:'Needs',v:r.needs},{l:'Prayer Requests',v:r.prayer},{l:'Comments',v:r.comments}].filter(x=>x.v).map(x=>`<div style="font-size:13px;padding:4px 0;border-top:1px solid var(--gray-100);"><strong style="color:var(--text-muted);font-size:12px;">${x.l}:</strong> ${esc(x.v)}</div>`).join('')}
     </div>
   `).join('')+'</div>';
+}
+
+// ── GOOGLE SHEETS SYNC ──
+const SHEETS_API_KEY = 'AIzaSyBRczfvEjQ2XrsM7WvwDyLB4EQfExewzWg';
+const SHEETS_ID = '1Uq5pyl5TCDktFpeM3W-amAgmJ41yEcVB2DtptHWH88s';
+const SHEET_TAB = 'Form Responses 1';
+
+async function syncFromSheets() {
+  const statusEl = document.getElementById('sync-status');
+  statusEl.textContent = 'Connecting…';
+  statusEl.style.color = 'var(--text-muted)';
+  try {
+    const range = encodeURIComponent(`'${SHEET_TAB}'!A1:W1000`);
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/${range}?key=${SHEETS_API_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error?.message || 'API error');
+    }
+    const data = await res.json();
+    const rows = data.values || [];
+    if (rows.length < 2) { statusEl.textContent = 'No responses found in sheet.'; return; }
+
+    const headers = rows[0].map(h => h.trim());
+    // Map exact column headers from the sheet
+    const colMap = {
+      'Timestamp': 'timestamp',
+      'Email Address': 'email',
+      'Year': 'year',
+      'School': 'school',
+      'Total Students Enrolled': 'enrolled',
+      'Total Students Graduated': 'graduated',
+      'New Students Added': 'newStudents',
+      'Programs Added/Discontinued': 'programs',
+      'Total Churches Planted by Graduates': 'churches',
+      'Graduate Ministry Placements': 'placements',
+      'Evangelism/Outreach Activities': 'outreach',
+      'Total Faculty Count': 'faculty',
+      'Have there been any leadership changes?': 'leadershipChanged',
+      'If yes, please provide details.': 'leadershipDetails',
+      'Please share details of any changes to the primary meeting facility.': 'facility',
+      'Please share details of any new locations or satellite campuses.': 'locations',
+      'Annual Budget': 'budget',
+      'What percentage of the budget was funded?': 'budgetPct',
+      'New Supporters': 'newSupporters',
+      'Discontinued Supporters': 'discontinuedSupporters',
+      'Current School Needs': 'needs',
+      'Prayer Requests': 'prayer',
+      'Comments': 'comments',
+    };
+
+    let imported = 0, skipped = 0, noMatch = [];
+    for (let i = 1; i < rows.length; i++) {
+      const row = {};
+      headers.forEach((h, idx) => {
+        const key = colMap[h];
+        if (key) row[key] = (rows[i][idx] || '').trim();
+      });
+      if (!row.school || !row.year) { skipped++; continue; }
+      const school = DB.schools.find(s => s.name.trim().toLowerCase() === row.school.trim().toLowerCase());
+      if (!school) { noMatch.push(row.school); skipped++; continue; }
+      if (!school.annualReports) school.annualReports = [];
+      const existingIdx = school.annualReports.findIndex(r => String(r.year) === String(row.year));
+      const report = { id: 'ar' + Date.now() + i, ...row };
+      if (existingIdx >= 0) { school.annualReports[existingIdx] = report; }
+      else { school.annualReports.push(report); }
+      imported++;
+    }
+    save();
+    logActivity(`Synced ${imported} annual report(s) from Google Sheets`);
+    refreshAll();
+    let msg = `✅ ${imported} report(s) synced successfully.`;
+    if (skipped) msg += ` ${skipped} row(s) skipped.`;
+    if (noMatch.length) msg += ` No match: ${[...new Set(noMatch)].join(', ')}`;
+    statusEl.style.color = imported > 0 ? 'var(--success)' : 'var(--warn)';
+    statusEl.textContent = msg;
+  } catch(err) {
+    statusEl.style.color = 'var(--danger)';
+    statusEl.textContent = `Error: ${err.message}`;
+    console.error('Sheets sync error:', err);
+  }
 }
 
 // ── ANNUAL REPORT CSV IMPORT ──
