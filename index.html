@@ -631,6 +631,7 @@ tr:hover td { background: #fdf8f0; }
           <table>
             <thead><tr>
               <th>School name</th>
+              <th>Intent</th>
               <th>Country / City</th>
               <th>Contact</th>
               <th>Stage</th>
@@ -1023,6 +1024,13 @@ tr:hover td { background: #fdf8f0; }
         <div class="form-section-title">School Info</div>
         <div class="form-grid">
           <div class="form-group full"><label>School Name *</label><input type="text" id="pf-name"></div>
+          <div class="form-group"><label>Intent</label>
+            <select id="pf-intent">
+              <option value="">Not specified</option>
+              <option>Partner with existing school</option>
+              <option>Establish new school</option>
+            </select>
+          </div>
           <div class="form-group"><label>City</label><input type="text" id="pf-city"></div>
           <div class="form-group"><label>Country</label><input type="text" id="pf-country"></div>
           <div class="form-group"><label>Website</label><input type="url" id="pf-website" placeholder="https://"></div>
@@ -1941,10 +1949,10 @@ function openProspectForm(id){
     set('pf-name',p.name);set('pf-city',p.city);set('pf-country',p.country);set('pf-website',p.website);
     set('pf-overseeing-church',p.overseeingChurch);set('pf-contact',p.contact);set('pf-email',p.email);set('pf-phone',p.phone);
     set('pf-stage',p.stage);set('pf-last-contact',p.lastContact);set('pf-next-step',p.nextStep);
-    set('pf-source',p.source);set('pf-notes',p.notes);
+    set('pf-source',p.source);set('pf-notes',p.notes);set('pf-intent',p.intent||'');
   } else {
     document.getElementById('pf-title').textContent='Add Prospective School';
-    ['pf-name','pf-city','pf-country','pf-website','pf-overseeing-church','pf-contact','pf-email','pf-phone','pf-last-contact','pf-next-step','pf-source','pf-notes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    ['pf-name','pf-city','pf-country','pf-website','pf-overseeing-church','pf-contact','pf-email','pf-phone','pf-last-contact','pf-next-step','pf-source','pf-notes','pf-intent'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
     document.getElementById('pf-stage').value='Prospect';
   }
   document.getElementById('prospect-form-overlay').classList.add('open');
@@ -1953,7 +1961,7 @@ function closeProspectForm(){document.getElementById('prospect-form-overlay').cl
 
 function saveProspect(){
   const g=id=>{const el=document.getElementById(id);return el?el.value.trim():'';};
-  const data={name:g('pf-name'),city:g('pf-city'),country:g('pf-country'),website:g('pf-website'),overseeingChurch:g('pf-overseeing-church'),contact:g('pf-contact'),email:g('pf-email'),phone:g('pf-phone'),stage:g('pf-stage'),lastContact:g('pf-last-contact'),nextStep:g('pf-next-step'),source:g('pf-source'),notes:g('pf-notes')};
+  const data={name:g('pf-name'),city:g('pf-city'),country:g('pf-country'),website:g('pf-website'),overseeingChurch:g('pf-overseeing-church'),intent:g('pf-intent'),contact:g('pf-contact'),email:g('pf-email'),phone:g('pf-phone'),stage:g('pf-stage'),lastContact:g('pf-last-contact'),nextStep:g('pf-next-step'),source:g('pf-source'),notes:g('pf-notes')};
   if(!data.name){alert('School name is required.');return;}
   if(editingProspectId){
     const i=DB.prospects.findIndex(x=>x.id===editingProspectId);
@@ -1977,6 +1985,7 @@ function renderProspects(){
   tbody.innerHTML=list.length?list.map(p=>`
     <tr>
       <td><span class="school-name" onclick="openProspectForm('${p.id}')">${p.name}</span></td>
+      <td>${intentBadge(p.intent)}</td>
       <td>${[p.country,p.city].filter(Boolean).join(', ')||'—'}</td>
       <td>${p.contact||'—'}</td>
       <td>${prospectBadge(p.stage)}</td>
@@ -1988,12 +1997,20 @@ function renderProspects(){
         <button class="btn-icon" title="Convert to partner" onclick="convertProspect('${p.id}')" style="font-size:13px;">✓</button>
       </td>
     </tr>
-  `).join(''):`<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted);font-style:italic;">No prospects found.</td></tr>`;
+  `).join(''):`<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);font-style:italic;">No prospects found.</td></tr>`;
 }
 
 function prospectBadge(s){
   const map={Prospect:'prospect',Contacted:'contacted',Negotiating:'negotiating',Declined:'declined'};
-  return `<span class="badge badge-${map[s]||'prospect'}">${s}</span>`;
+  return `<span class="badge badge-${map[s]||'prospect'}">${s||'—'}</span>`;
+}
+function intentBadge(s){
+  if(!s) return '<span style="color:var(--text-muted);font-size:13px;">—</span>';
+  const style = s==='Establish new school'
+    ? 'background:#f0e8fe;color:#4a1580;'
+    : 'background:#e3f2fd;color:#0d47a1;';
+  const label = s==='Establish new school' ? '🌱 New school' : '🤝 Existing school';
+  return `<span style="${style}padding:2px 9px;border-radius:99px;font-size:12px;font-weight:500;">${label}</span>`;
 }
 
 function deleteProspect(id){
