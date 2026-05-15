@@ -677,6 +677,16 @@ tr:hover td { background: #fdf8f0; }
         <div style="margin-top:10px;font-size:13px;color:var(--text-muted);">Data is stored locally in your browser. Export regularly to keep a backup.</div>
 
         <div style="border-top:1px solid var(--gray-200);margin:1.75rem 0;"></div>
+        <div style="font-size:13px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:1rem;">Import Annual Reports from Google Forms</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">
+          Export your Google Form responses as a CSV from Google Sheets (File → Download → CSV), then import here. School names must match exactly.
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-gold" onclick="document.getElementById('ar-csv-file').click()">⬆ Import Annual Report CSV</button>
+          <input type="file" id="ar-csv-file" accept=".csv" style="display:none" onchange="importAnnualReportCSV(event)">
+        </div>
+
+        <div style="border-top:1px solid var(--gray-200);margin:1.75rem 0;"></div>
         <div style="font-size:13px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:1rem;">Danger Zone</div>
         <button class="btn btn-danger" onclick="clearAllData()">Clear All Data</button>
       </div>
@@ -707,7 +717,8 @@ tr:hover td { background: #fdf8f0; }
       <button class="dtab" onclick="switchSFTab(7)">Initiatives & Programs</button>
       <button class="dtab" onclick="switchSFTab(8)">Accreditation</button>
       <button class="dtab" onclick="switchSFTab(9)">Churches Planted</button>
-      <button class="dtab" onclick="switchSFTab(10)">Notes & Logo</button>
+      <button class="dtab" onclick="switchSFTab(10)">Annual Reports</button>
+      <button class="dtab" onclick="switchSFTab(11)">Notes & Logo</button>
     </div>
     <div class="drawer-body">
 
@@ -982,8 +993,65 @@ tr:hover td { background: #fdf8f0; }
         <div id="church-list"></div>
       </div>
 
-      <!-- TAB 10: Notes & Logo -->
+      <!-- TAB 10: Annual Reports -->
       <div class="dtab-content" id="sf-tab-10">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+          <div style="font-size:14px;color:var(--text-muted);">Annual reports submitted by the school each January</div>
+          <button class="btn btn-gold btn-sm" onclick="toggleMiniForm('ar-form')">+ Add Report</button>
+        </div>
+        <div class="mini-form" id="ar-form">
+          <div style="font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:0.05em;color:var(--gold);margin-bottom:10px;">Report Year</div>
+          <div class="mini-form-grid" style="grid-template-columns:1fr 1fr;">
+            <input type="number" id="ar-year" placeholder="Year (e.g. 2025)" min="2020" max="2099">
+          </div>
+          <div style="font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:0.05em;color:var(--gold);margin:12px 0 8px;">Academic</div>
+          <div class="mini-form-grid">
+            <input type="number" id="ar-enrolled" placeholder="Total Students Enrolled">
+            <input type="number" id="ar-graduated" placeholder="Total Students Graduated">
+            <input type="number" id="ar-new-students" placeholder="New Students Added">
+            <textarea id="ar-programs" placeholder="Programs Added / Discontinued"></textarea>
+          </div>
+          <div style="font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:0.05em;color:var(--gold);margin:12px 0 8px;">Ministry Impact</div>
+          <div class="mini-form-grid">
+            <input type="number" id="ar-churches" placeholder="Total Churches Planted by Graduates">
+            <textarea id="ar-placements" placeholder="Graduate Ministry Placements (new only)"></textarea>
+            <textarea id="ar-outreach" placeholder="Evangelism / Outreach Activities"></textarea>
+          </div>
+          <div style="font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:0.05em;color:var(--gold);margin:12px 0 8px;">Staff & Leadership</div>
+          <div class="mini-form-grid">
+            <input type="number" id="ar-faculty" placeholder="Total Faculty Count">
+            <select id="ar-leadership-changed"><option value="">Leadership changes?</option><option>Yes</option><option>No</option></select>
+            <textarea id="ar-leadership-details" placeholder="Leadership change details (if yes)"></textarea>
+          </div>
+          <div style="font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:0.05em;color:var(--gold);margin:12px 0 8px;">Facility & Growth</div>
+          <div class="mini-form-grid">
+            <textarea id="ar-facility" placeholder="Changes to primary meeting facility"></textarea>
+            <textarea id="ar-locations" placeholder="New locations or satellite campuses"></textarea>
+          </div>
+          <div style="font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:0.05em;color:var(--gold);margin:12px 0 8px;">Financial Health</div>
+          <div class="mini-form-grid">
+            <input type="number" id="ar-budget" placeholder="Annual Budget (USD)">
+            <input type="text" id="ar-budget-pct" placeholder="% of budget funded by us">
+            <textarea id="ar-new-supporters" placeholder="New Supporters (name, city, country)"></textarea>
+            <textarea id="ar-discontinued-supporters" placeholder="Discontinued Supporters"></textarea>
+          </div>
+          <div style="font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:0.05em;color:var(--gold);margin:12px 0 8px;">Needs & Requests</div>
+          <div class="mini-form-grid">
+            <textarea id="ar-needs" placeholder="Current School Needs"></textarea>
+            <textarea id="ar-prayer" placeholder="Prayer Requests"></textarea>
+            <textarea id="ar-comments" placeholder="Comments / anything else"></textarea>
+          </div>
+          <div class="mini-form-actions">
+            <button class="btn btn-ghost btn-sm" onclick="closeMiniForm('ar-form')">Cancel</button>
+            <button class="btn btn-primary btn-sm" id="ar-save-btn" onclick="addAnnualReport()">Save Report</button>
+          </div>
+        </div>
+        <input type="hidden" id="ar-editing-id">
+        <div id="ar-list"></div>
+      </div>
+
+      <!-- TAB 11: Notes & Logo -->
+      <div class="dtab-content" id="sf-tab-11">
         <div class="form-section">
           <div class="form-section-title">School Logo</div>
           <div class="logo-area" onclick="document.getElementById('logo-input').click()">
@@ -1086,6 +1154,7 @@ let tempInitiatives = [];
 let tempGradCohorts = [];
 let tempDonors = [];
 let tempChurches = [];
+let tempAnnualReports = [];
 let tempLogo = null;
 
 // ── PERSISTENCE ──
@@ -1311,6 +1380,7 @@ function openSchoolForm(id) {
   tempGradCohorts = [];
   tempDonors = [];
   tempChurches = [];
+  tempAnnualReports = [];
   tempLogo = null;
   tempDirectorPhoto = null;
   tempGTPhoto = null;
@@ -1328,6 +1398,7 @@ function openSchoolForm(id) {
     tempGradCohorts = JSON.parse(JSON.stringify(s.gradCohorts||[]));
     tempDonors = JSON.parse(JSON.stringify(s.donors||[]));
     tempChurches = JSON.parse(JSON.stringify(s.churches||[]));
+    tempAnnualReports = JSON.parse(JSON.stringify(s.annualReports||[]));
     tempLogo = s.logo||null;
     tempDirectorPhoto = s.directorPhoto||null;
     tempGTPhoto = null;
@@ -1343,6 +1414,7 @@ function openSchoolForm(id) {
   renderGradCohortList();
   renderDonorList();
   renderChurchList();
+  renderAnnualReportList();
   updateLogoPreview();
   // update director avatar
   const dw = document.getElementById('director-avatar-wrap');
@@ -1417,6 +1489,7 @@ function collectSchoolForm() {
     gradCohorts: JSON.parse(JSON.stringify(tempGradCohorts)),
     donors: JSON.parse(JSON.stringify(tempDonors)),
     churches: JSON.parse(JSON.stringify(tempChurches)),
+    annualReports: JSON.parse(JSON.stringify(tempAnnualReports)),
     logo: tempLogo,
     directorPhoto: tempDirectorPhoto
   };
@@ -1485,20 +1558,22 @@ const MINI_FORM_FIELDS = {
   'init-form':   ['if-name','if-start','if-end','if-desc'],
   'grad-form':   ['grf-year','grf-count','grf-program','grf-notes'],
   'church-form': ['cf-name','cf-planter','cf-year','cf-location','cf-notes'],
+  'ar-form': ['ar-year','ar-enrolled','ar-graduated','ar-new-students','ar-programs','ar-churches','ar-placements','ar-outreach','ar-faculty','ar-leadership-details','ar-facility','ar-locations','ar-budget','ar-budget-pct','ar-new-supporters','ar-discontinued-supporters','ar-needs','ar-prayer','ar-comments'],
 };
 const MINI_FORM_EDIT_IDS = {
   'visit-form':'vf-editing-id','gt-form':'gtf-editing-id','fin-form':'ff-editing-id',
   'donor-form':'df-editing-id','init-form':'if-editing-id','grad-form':'grf-editing-id',
-  'church-form':'cf-editing-id'
+  'church-form':'cf-editing-id',
+  'ar-form':'ar-editing-id'
 };
 const MINI_FORM_BTN_IDS = {
   'visit-form':'vf-save-btn','gt-form':'gtf-save-btn','fin-form':'ff-save-btn',
   'donor-form':'df-save-btn','init-form':'if-save-btn','grad-form':'grf-save-btn',
-  'church-form':'cf-save-btn'
+  'church-form':'cf-save-btn','ar-form':'ar-save-btn'
 };
 const MINI_FORM_BTN_LABELS = {
   'visit-form':'Save Visit','gt-form':'Save','fin-form':'Save',
-  'donor-form':'Save','init-form':'Save','grad-form':'Save Cohort','church-form':'Save'
+  'donor-form':'Save','init-form':'Save','grad-form':'Save Cohort','church-form':'Save','ar-form':'Save Report'
 };
 
 function miniFormIsDirty(id) {
@@ -1922,6 +1997,116 @@ function renderChurchList(){
       </div>
     </div>
   `).join('')+'</div>';
+}
+
+// ── ANNUAL REPORTS ──
+function addAnnualReport(){
+  const id=document.getElementById('ar-editing-id').value;
+  const g=f=>{ const el=document.getElementById(f); return el?el.value.trim():''; };
+  const r={id:id||'ar'+Date.now(),year:g('ar-year'),enrolled:g('ar-enrolled'),graduated:g('ar-graduated'),newStudents:g('ar-new-students'),programs:g('ar-programs'),churches:g('ar-churches'),placements:g('ar-placements'),outreach:g('ar-outreach'),faculty:g('ar-faculty'),leadershipChanged:g('ar-leadership-changed'),leadershipDetails:g('ar-leadership-details'),facility:g('ar-facility'),locations:g('ar-locations'),budget:g('ar-budget'),budgetPct:g('ar-budget-pct'),newSupporters:g('ar-new-supporters'),discontinuedSupporters:g('ar-discontinued-supporters'),needs:g('ar-needs'),prayer:g('ar-prayer'),comments:g('ar-comments')};
+  if(!r.year) return;
+  if(id){const i=tempAnnualReports.findIndex(x=>x.id===id);tempAnnualReports[i]=r;}
+  else tempAnnualReports.push(r);
+  (MINI_FORM_FIELDS['ar-form']||[]).forEach(fid=>{const el=document.getElementById(fid);if(el)el.value='';});
+  document.getElementById('ar-editing-id').value='';
+  document.getElementById('ar-save-btn').textContent='Save Report';
+  document.getElementById('ar-form').classList.remove('open');
+  renderAnnualReportList();
+}
+function editAnnualReport(id){
+  const r=tempAnnualReports.find(x=>x.id===id);if(!r)return;
+  const fields={year:'ar-year',enrolled:'ar-enrolled',graduated:'ar-graduated',newStudents:'ar-new-students',programs:'ar-programs',churches:'ar-churches',placements:'ar-placements',outreach:'ar-outreach',faculty:'ar-faculty',leadershipChanged:'ar-leadership-changed',leadershipDetails:'ar-leadership-details',facility:'ar-facility',locations:'ar-locations',budget:'ar-budget',budgetPct:'ar-budget-pct',newSupporters:'ar-new-supporters',discontinuedSupporters:'ar-discontinued-supporters',needs:'ar-needs',prayer:'ar-prayer',comments:'ar-comments'};
+  Object.entries(fields).forEach(([k,fid])=>{const el=document.getElementById(fid);if(el)el.value=r[k]||'';});
+  document.getElementById('ar-editing-id').value=id;
+  document.getElementById('ar-save-btn').textContent='Update Report';
+  document.getElementById('ar-form').classList.add('open');
+}
+function removeAnnualReport(id){tempAnnualReports=tempAnnualReports.filter(r=>r.id!==id);renderAnnualReportList();}
+function renderAnnualReportList(){
+  const el=document.getElementById('ar-list');if(!el)return;
+  if(!tempAnnualReports.length){el.innerHTML='<div class="list-empty">No annual reports yet. Import from CSV or add manually.</div>';return;}
+  const sorted=[...tempAnnualReports].sort((a,b)=>b.year-a.year);
+  el.innerHTML='<div class="list-card">'+sorted.map(r=>`
+    <div class="list-item" style="flex-direction:column;align-items:stretch;gap:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-family:'Lora',serif;font-size:18px;font-weight:600;color:var(--navy);">${r.year} Annual Report</span>
+        <div class="list-actions">
+          <button class="btn-icon" onclick="editAnnualReport('${r.id}')">✏️</button>
+          <button class="btn-icon danger" onclick="removeAnnualReport('${r.id}')">🗑</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;">
+        ${r.enrolled?`<div style="background:var(--gray-100);border-radius:6px;padding:8px 10px;"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;">Enrolled</div><div style="font-size:16px;font-weight:500;">${r.enrolled}</div></div>`:''}
+        ${r.graduated?`<div style="background:var(--gray-100);border-radius:6px;padding:8px 10px;"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;">Graduated</div><div style="font-size:16px;font-weight:500;">${r.graduated}</div></div>`:''}
+        ${r.newStudents?`<div style="background:var(--gray-100);border-radius:6px;padding:8px 10px;"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;">New Students</div><div style="font-size:16px;font-weight:500;">${r.newStudents}</div></div>`:''}
+        ${r.churches?`<div style="background:var(--gray-100);border-radius:6px;padding:8px 10px;"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;">Churches Planted</div><div style="font-size:16px;font-weight:500;">${r.churches}</div></div>`:''}
+        ${r.faculty?`<div style="background:var(--gray-100);border-radius:6px;padding:8px 10px;"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;">Faculty</div><div style="font-size:16px;font-weight:500;">${r.faculty}</div></div>`:''}
+        ${r.budget?`<div style="background:var(--gray-100);border-radius:6px;padding:8px 10px;"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;">Budget (USD)</div><div style="font-size:16px;font-weight:500;">$${parseFloat(r.budget).toLocaleString()}</div></div>`:''}
+      </div>
+      ${[{l:'Placements',v:r.placements},{l:'Outreach',v:r.outreach},{l:'Programs',v:r.programs},{l:'Facility Changes',v:r.facility},{l:'New Locations',v:r.locations},{l:'New Supporters',v:r.newSupporters},{l:'Discontinued Supporters',v:r.discontinuedSupporters},{l:'Leadership Changes',v:r.leadershipChanged==='Yes'?(r.leadershipDetails||'Yes'):''},{l:'Needs',v:r.needs},{l:'Prayer Requests',v:r.prayer},{l:'Comments',v:r.comments}].filter(x=>x.v).map(x=>`<div style="font-size:13px;padding:4px 0;border-top:1px solid var(--gray-100);"><strong style="color:var(--text-muted);font-size:12px;">${x.l}:</strong> ${esc(x.v)}</div>`).join('')}
+    </div>
+  `).join('')+'</div>';
+}
+
+// ── ANNUAL REPORT CSV IMPORT ──
+function importAnnualReportCSV(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const lines=ev.target.result.split('\n').filter(l=>l.trim());
+    if(lines.length<2){alert('CSV appears empty.');return;}
+    // Parse CSV respecting quoted fields
+    const parseRow=row=>{const cols=[];let cur='',inQ=false;for(let i=0;i<row.length;i++){const c=row[i];if(c==='"'){inQ=!inQ;}else if(c===','&&!inQ){cols.push(cur.trim());cur='';}else{cur+=c;}}cols.push(cur.trim());return cols;};
+    const headers=parseRow(lines[0]).map(h=>h.replace(/^"|"$/g,'').trim());
+    // Column map: Google Form column name → our field key
+    const colMap={
+      'School':'school','Timestamp':'timestamp',
+      'What year is this report for?':'year',
+      'Total Students Enrolled':'enrolled',
+      'Total Students Graduated':'graduated',
+      'New Students Added':'newStudents',
+      'Programs Added/Discontinued':'programs',
+      'Total Churches Planted by Graduates':'churches',
+      'Graduate Ministry Placements':'placements',
+      'Evangelism/Outreach Activities':'outreach',
+      'Total Faculty Count':'faculty',
+      'Have there been any leadership changes?':'leadershipChanged',
+      'If yes, please provide details.':'leadershipDetails',
+      'Please share details of any changes to the primary meeting facility.':'facility',
+      'Please share details of any new locations or satellite campuses.':'locations',
+      'Annual Budget':'budget',
+      'What percentage of the budget was funded?':'budgetPct',
+      'New Supporters':'newSupporters',
+      'Discontinued Supporters':'discontinuedSupporters',
+      'Current School Needs':'needs',
+      'Prayer Requests':'prayer',
+      'Comments':'comments',
+    };
+    let imported=0, skipped=0, noMatch=[];
+    for(let i=1;i<lines.length;i++){
+      const vals=parseRow(lines[i]);
+      const row={};
+      headers.forEach((h,idx)=>{const key=colMap[h];if(key)row[key]=vals[idx]?vals[idx].replace(/^"|"$/g,'').trim():'';});
+      if(!row.school||!row.year){skipped++;continue;}
+      // Match to school by name (case-insensitive, trimmed)
+      const school=DB.schools.find(s=>s.name.trim().toLowerCase()===row.school.trim().toLowerCase());
+      if(!school){noMatch.push(row.school);skipped++;continue;}
+      if(!school.annualReports) school.annualReports=[];
+      // Replace existing report for same year or add new
+      const existingIdx=school.annualReports.findIndex(r=>String(r.year)===String(row.year));
+      const report={id:'ar'+Date.now()+i,...row};
+      if(existingIdx>=0){school.annualReports[existingIdx]=report;}
+      else{school.annualReports.push(report);}
+      imported++;
+    }
+    save();
+    let msg=`Import complete: ${imported} report(s) imported.`;
+    if(skipped) msg+=` ${skipped} row(s) skipped.`;
+    if(noMatch.length) msg+=`\n\nNo matching school found for:\n${[...new Set(noMatch)].join('\n')}`;
+    alert(msg);
+  };
+  reader.readAsText(file);
+  e.target.value='';
 }
 
 // ── LOGO ──
