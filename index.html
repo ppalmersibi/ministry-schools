@@ -523,7 +523,7 @@ tr:hover td { background: #fdf8f0; }
     <input type="password" id="pwd-input" placeholder="Enter password" onkeydown="if(event.key==='Enter')tryLogin()">
     <button onclick="tryLogin()">Enter</button>
     <div class="auth-error" id="auth-error"></div>
-    <div class="auth-hint">First time? Default password is <strong>ministry2024</strong> — change it in Settings.</div>
+    <div class="auth-hint">Change your password anytime in Settings.</div>
   </div>
 </div>
 
@@ -1141,7 +1141,6 @@ tr:hover td { background: #fdf8f0; }
 <script>
 // ── STATE ──
 let DB = {
-  password: 'ministry2024',
   schools: [],
   prospects: [],
   activity: []
@@ -1172,9 +1171,18 @@ function load() {
 }
 
 // ── AUTH ──
-function tryLogin() {
+const DEFAULT_PASSWORD_HASH = 'fc393211cf253a76ddb2b7428427127420120edce4072e18e44d6f387ca47a0f';
+
+async function hashPassword(pwd) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pwd));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+async function tryLogin() {
   const v = document.getElementById('pwd-input').value;
-  if (v === DB.password) {
+  const hash = await hashPassword(v);
+  const storedHash = DB.passwordHash || DEFAULT_PASSWORD_HASH;
+  if (hash === storedHash) {
     document.getElementById('auth-screen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     refreshAll();
@@ -1183,21 +1191,26 @@ function tryLogin() {
     document.getElementById('pwd-input').value = '';
   }
 }
+
 function logout() {
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('app').style.display = 'none';
   document.getElementById('pwd-input').value = '';
   document.getElementById('auth-error').textContent = '';
 }
-function changePassword() {
+
+async function changePassword() {
   const old = document.getElementById('s-old-pwd').value;
   const n = document.getElementById('s-new-pwd').value;
   const c = document.getElementById('s-confirm-pwd').value;
   const msg = document.getElementById('s-msg');
-  if (old !== DB.password) { msg.style.color='var(--danger)'; msg.textContent='Current password incorrect.'; return; }
+  const oldHash = await hashPassword(old);
+  const storedHash = DB.passwordHash || DEFAULT_PASSWORD_HASH;
+  if (oldHash !== storedHash) { msg.style.color='var(--danger)'; msg.textContent='Current password incorrect.'; return; }
   if (n.length < 6) { msg.style.color='var(--danger)'; msg.textContent='New password must be at least 6 characters.'; return; }
   if (n !== c) { msg.style.color='var(--danger)'; msg.textContent='Passwords do not match.'; return; }
-  DB.password = n;
+  DB.passwordHash = await hashPassword(n);
+  delete DB.password;
   save();
   msg.style.color='var(--success)';
   msg.textContent='Password updated successfully.';
@@ -2316,7 +2329,7 @@ function importData(e){
 function clearAllData(){
   if(!confirm('Delete ALL data permanently? This cannot be undone.'))return;
   if(!confirm('Are you absolutely sure?'))return;
-  DB={password:DB.password,schools:[],prospects:[],activity:[]};
+  DB={passwordHash:DB.passwordHash,schools:[],prospects:[],activity:[]};
   save();refreshAll();
 }
 
