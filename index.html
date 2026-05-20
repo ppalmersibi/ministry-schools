@@ -535,6 +535,7 @@ tr:hover td { background: #fdf8f0; }
       <button class="nav-btn active" onclick="showPage('dashboard')">Dashboard</button>
       <button class="nav-btn" onclick="showPage('partners')">Partner Schools</button>
       <button class="nav-btn" onclick="showPage('prospects')">Prospective</button>
+      <button class="nav-btn" onclick="showPage('journal')">Journal</button>
       <button class="nav-btn" onclick="showPage('settings')">Settings</button>
     </div>
     <div class="topbar-right">
@@ -599,6 +600,7 @@ tr:hover td { background: #fdf8f0; }
               <th>Last renewed</th>
               <th>Last site visit</th>
               <th>Status</th>
+              <th>Journal</th>
               <th></th>
             </tr></thead>
             <tbody id="partners-tbody"></tbody>
@@ -643,6 +645,32 @@ tr:hover td { background: #fdf8f0; }
           </table>
         </div>
       </div>
+    </div>
+
+    <!-- JOURNAL -->
+    <div class="page" id="page-journal">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Journal</div>
+          <div class="page-sub">A log of conversations, meetings, and notes across all schools</div>
+        </div>
+      </div>
+      <div class="toolbar">
+        <input type="text" id="j-search" placeholder="Search journal entries…" oninput="renderJournal()">
+        <select id="j-school" onchange="renderJournal()">
+          <option value="">All schools</option>
+        </select>
+        <select id="j-category" onchange="renderJournal()">
+          <option value="">All categories</option>
+          <option>📞 Call</option>
+          <option>📧 Email</option>
+          <option>🤝 Meeting</option>
+          <option>✈️ Visit</option>
+          <option>🙏 Prayer</option>
+          <option>📝 General</option>
+        </select>
+      </div>
+      <div id="journal-list"></div>
     </div>
 
     <!-- SETTINGS -->
@@ -700,6 +728,56 @@ tr:hover td { background: #fdf8f0; }
   </div><!-- /main -->
 </div><!-- /app -->
 
+
+<!-- JOURNAL ENTRY OVERLAY -->
+<div class="overlay" id="journal-overlay">
+  <div class="drawer" style="max-width:560px;">
+    <div class="drawer-header">
+      <div>
+        <div class="drawer-title" id="journal-overlay-title">New Journal Entry</div>
+        <div class="drawer-sub" id="journal-overlay-sub"></div>
+      </div>
+      <button class="drawer-close" onclick="closeJournalOverlay()">✕</button>
+    </div>
+    <div class="drawer-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="je-date">
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select id="je-category">
+            <option>📞 Call</option>
+            <option>📧 Email</option>
+            <option>🤝 Meeting</option>
+            <option>✈️ Visit</option>
+            <option>🙏 Prayer</option>
+            <option>📝 General</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label>With Whom</label>
+          <select id="je-with-whom-select" onchange="handleWithWhomSelect()">
+            <option value="">— Select or type below —</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label>Or type a name</label>
+          <input type="text" id="je-with-whom" placeholder="Name of person(s)">
+        </div>
+        <div class="form-group full">
+          <label>Notes *</label>
+          <textarea id="je-notes" style="min-height:120px;" placeholder="What was discussed, decided, or noted…"></textarea>
+        </div>
+      </div>
+      <div class="form-footer">
+        <button class="btn btn-ghost" onclick="closeJournalOverlay()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveJournalEntry()">Save Entry</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- SCHOOL FORM OVERLAY -->
 <div class="overlay" id="school-form-overlay">
@@ -1231,6 +1309,7 @@ function showPage(id) {
   if (id==='dashboard') refreshDashboard();
   if (id==='partners') renderPartners();
   if (id==='prospects') renderProspects();
+  if (id==='journal') renderJournal();
 }
 
 // ── REFRESH ──
@@ -1355,12 +1434,13 @@ function renderPartners() {
       <td>${s.renewedYear||'—'}</td>
       <td>${lastVisitDisplay}</td>
       <td>${statusBadge(s.status)}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="openJournalOverlay('${s.id}')" title="Add journal entry">📝 Log</button></td>
       <td style="display:flex;gap:4px;">
         <button class="btn-icon" title="Edit" onclick="openSchoolForm('${s.id}')">✏️</button>
         <button class="btn-icon danger" title="Delete" onclick="deleteSchool('${s.id}')">🗑</button>
       </td>
     </tr>
-  `}).join('') : `<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);font-style:italic;">No schools found.</td></tr>`;
+  `}).join('') : `<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-muted);font-style:italic;">No schools found.</td></tr>`;
 
   // stats
   const active = DB.schools.filter(s=>s.status==='Active').length;
@@ -2354,6 +2434,156 @@ function clearAllData(){
   save();refreshAll();
 }
 
+// ── JOURNAL ──
+let journalSchoolId = null;
+let journalEditingId = null;
+
+function openJournalOverlay(schoolId, entryId) {
+  journalSchoolId = schoolId;
+  journalEditingId = entryId || null;
+  const school = DB.schools.find(s=>s.id===schoolId);
+  document.getElementById('journal-overlay-title').textContent = entryId ? 'Edit Journal Entry' : 'New Journal Entry';
+  document.getElementById('journal-overlay-sub').textContent = school ? school.name : '';
+
+  // Populate with whom dropdown from director + faculty
+  const sel = document.getElementById('je-with-whom-select');
+  sel.innerHTML = '<option value="">— Select or type below —</option>';
+  if (school) {
+    if (school.directorName) sel.innerHTML += `<option>${school.directorName}${school.directorTitle?' ('+school.directorTitle+')':''}</option>`;
+    (school.faculty||[]).forEach(f => { if(f.name) sel.innerHTML += `<option>${f.name}${f.role?' ('+f.role+')':''}</option>`; });
+  }
+
+  if (entryId) {
+    const entry = (school.journal||[]).find(e=>e.id===entryId);
+    if (entry) {
+      document.getElementById('je-date').value = entry.date||'';
+      document.getElementById('je-category').value = entry.category||'📝 General';
+      document.getElementById('je-with-whom').value = entry.withWhom||'';
+      document.getElementById('je-notes').value = entry.notes||'';
+    }
+  } else {
+    const today = new Date();
+    document.getElementById('je-date').value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    document.getElementById('je-category').value = '📝 General';
+    document.getElementById('je-with-whom').value = '';
+    document.getElementById('je-with-whom-select').value = '';
+    document.getElementById('je-notes').value = '';
+  }
+  document.getElementById('journal-overlay').classList.add('open');
+}
+
+function handleWithWhomSelect() {
+  const sel = document.getElementById('je-with-whom-select');
+  if (sel.value) document.getElementById('je-with-whom').value = sel.value;
+}
+
+function closeJournalOverlay() {
+  document.getElementById('journal-overlay').classList.remove('open');
+  journalSchoolId = null;
+  journalEditingId = null;
+}
+
+function saveJournalEntry() {
+  if (!journalSchoolId) return;
+  const notes = document.getElementById('je-notes').value.trim();
+  if (!notes) { alert('Please add some notes.'); return; }
+  const school = DB.schools.find(s=>s.id===journalSchoolId);
+  if (!school) return;
+  if (!school.journal) school.journal = [];
+  const entry = {
+    id: journalEditingId || 'j'+Date.now(),
+    date: document.getElementById('je-date').value,
+    category: document.getElementById('je-category').value,
+    withWhom: document.getElementById('je-with-whom').value.trim(),
+    notes: notes,
+    schoolId: journalSchoolId,
+    schoolName: school.name
+  };
+  if (journalEditingId) {
+    const i = school.journal.findIndex(e=>e.id===journalEditingId);
+    school.journal[i] = entry;
+  } else {
+    school.journal.push(entry);
+  }
+  logActivity(`Journal entry added for ${school.name}`);
+  save();
+  closeJournalOverlay();
+  if (document.getElementById('page-journal').classList.contains('active')) renderJournal();
+}
+
+function deleteJournalEntry(schoolId, entryId) {
+  if (!confirm('Delete this journal entry?')) return;
+  const school = DB.schools.find(s=>s.id===schoolId);
+  if (!school) return;
+  school.journal = (school.journal||[]).filter(e=>e.id!==entryId);
+  save();
+  renderJournal();
+}
+
+function renderJournal() {
+  const q = (document.getElementById('j-search')||{value:''}).value.toLowerCase();
+  const sf = (document.getElementById('j-school')||{value:''}).value;
+  const cf = (document.getElementById('j-category')||{value:''}).value;
+
+  // Populate school filter
+  const schoolSel = document.getElementById('j-school');
+  if (schoolSel) {
+    const cur = schoolSel.value;
+    schoolSel.innerHTML = '<option value="">All schools</option>' + DB.schools.map(s=>`<option value="${s.id}"${s.id===cur?' selected':''}>${s.name}</option>`).join('');
+  }
+
+  // Gather all entries
+  let entries = [];
+  DB.schools.forEach(s => {
+    (s.journal||[]).forEach(e => {
+      entries.push({...e, schoolId:s.id, schoolName:s.name});
+    });
+  });
+
+  // Filter
+  entries = entries.filter(e => {
+    const txt = [e.notes, e.withWhom, e.schoolName, e.category].join(' ').toLowerCase();
+    return (!q||txt.includes(q)) && (!sf||e.schoolId===sf) && (!cf||e.category===cf);
+  });
+
+  // Sort newest first
+  entries.sort((a,b)=>b.date.localeCompare(a.date));
+
+  const el = document.getElementById('journal-list');
+  if (!el) return;
+  if (!entries.length) {
+    el.innerHTML = `<div class="card" style="padding:2rem;text-align:center;color:var(--text-muted);font-style:italic;">No journal entries found.</div>`;
+    return;
+  }
+
+  const catColors = {
+    '📞 Call':'#e3f2fd;color:#0d47a1',
+    '📧 Email':'#f3e5f5;color:#4a1580',
+    '🤝 Meeting':'#e8f5e9;color:#1a5c35',
+    '✈️ Visit':'#fff3e0;color:#8b4500',
+    '🙏 Prayer':'#fce4ec;color:#880e4f',
+    '📝 General':'#f5f5f5;color:#3d3830'
+  };
+
+  el.innerHTML = '<div class="card">'+entries.map(e=>{
+    const style = catColors[e.category]||'#f5f5f5;color:#3d3830';
+    return `
+    <div class="list-item" style="flex-direction:column;align-items:stretch;gap:6px;padding:14px 16px;">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="background:${style};padding:2px 9px;border-radius:99px;font-size:12px;font-weight:500;">${e.category}</span>
+        <strong style="color:var(--navy);font-size:13px;">${e.schoolName}</strong>
+        <span style="color:var(--text-muted);font-size:13px;">${e.date||''}</span>
+        ${e.withWhom?`<span style="font-size:13px;color:var(--text-muted);">with ${esc(e.withWhom)}</span>`:''}
+        <div style="margin-left:auto;display:flex;gap:4px;">
+          <button class="btn-icon" onclick="openJournalOverlay('${e.schoolId}','${e.id}')">✏️</button>
+          <button class="btn-icon danger" onclick="deleteJournalEntry('${e.schoolId}','${e.id}')">🗑</button>
+        </div>
+      </div>
+      <div style="font-size:14px;color:var(--text);line-height:1.6;white-space:pre-wrap;">${esc(e.notes)}</div>
+    </div>`;
+  }).join('')+'</div>';
+}
+
 // ── UTILS ──
 function esc(s){
   if(!s)return '';
@@ -2363,6 +2593,7 @@ function esc(s){
 // close overlays on bg click
 document.getElementById('school-form-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeSchoolForm();});
 document.getElementById('prospect-form-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeProspectForm();});
+document.getElementById('journal-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeJournalOverlay();});
 
 // init
 load();
