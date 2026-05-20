@@ -499,7 +499,58 @@ tr:hover td { background: #fdf8f0; }
 .mini-form-grid textarea { min-height: 60px; grid-column: 1 / -1; }
 .mini-form-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
-/* ── RESPONSIVE ── */
+/* ── QUICK VIEW PANEL ── */
+.quick-view {
+  position: fixed;
+  top: 58px;
+  right: 0;
+  width: 420px;
+  height: calc(100vh - 58px);
+  background: var(--white);
+  border-left: 1px solid var(--gray-200);
+  box-shadow: -4px 0 24px rgba(26,39,68,0.1);
+  z-index: 150;
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.quick-view.open { transform: translateX(0); }
+.qv-header { background: var(--navy); padding: 1.25rem 1.5rem; flex-shrink: 0; }
+.qv-title { font-family: 'Lora', serif; font-size: 18px; color: var(--white); }
+.qv-sub { font-size: 13px; color: rgba(255,255,255,0.6); margin-top: 3px; }
+.qv-close { position: absolute; top: 1rem; right: 1rem; background: rgba(255,255,255,0.12); border: none; color: var(--white); width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; }
+.qv-body { padding: 1.25rem 1.5rem; flex: 1; }
+.qv-section { margin-bottom: 1.25rem; }
+.qv-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--gold); font-weight: 500; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px solid var(--gold-pale); }
+.qv-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; border-bottom: 1px solid var(--gray-100); }
+.qv-row:last-child { border-bottom: none; }
+.qv-label { color: var(--text-muted); }
+.qv-val { font-weight: 500; text-align: right; max-width: 60%; }
+.qv-actions { display: flex; gap: 8px; padding: 1rem 1.5rem; border-top: 1px solid var(--gray-200); flex-shrink: 0; }
+
+/* ── PINNED / ARCHIVED ── */
+.pin-btn { font-size: 16px; background: none; border: none; cursor: pointer; padding: 4px; border-radius: 4px; line-height: 1; }
+.pin-btn:hover { background: var(--gray-100); }
+.badge-archived { background: var(--gray-100); color: var(--gray-600); }
+.badge-pinned { background: #fff8e1; color: #8a6000; }
+
+/* ── REGION TAG ── */
+.region-tag { display: inline-block; padding: 1px 7px; border-radius: 99px; font-size: 11px; background: var(--gray-100); color: var(--text-muted); margin-left: 4px; }
+
+/* ── ANNIVERSARY ── */
+.anniversary-badge { background: #fff0f6; color: #8b1a4a; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 500; }
+
+/* ── TREND CHART ── */
+.trend-bar-wrap { display: flex; align-items: flex-end; gap: 6px; height: 80px; padding-top: 8px; }
+.trend-bar-col { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; }
+.trend-bar { width: 100%; background: var(--navy); border-radius: 3px 3px 0 0; min-height: 2px; transition: height 0.3s; }
+.trend-bar.gold { background: var(--gold); }
+.trend-bar.green { background: #2d8653; }
+.trend-year { font-size: 10px; color: var(--text-muted); }
+.trend-val { font-size: 10px; color: var(--text-muted); }
+
 @media (max-width: 640px) {
   .form-grid, .form-grid.cols-3 { grid-template-columns: 1fr; }
   .form-group.full { grid-column: 1; }
@@ -554,6 +605,7 @@ tr:hover td { background: #fdf8f0; }
         </div>
         <button class="btn btn-primary" onclick="openSchoolForm()">+ Add School</button>
       </div>
+      <div style="font-size:12px;color:var(--gray-400);margin-bottom:0.5rem;">Tip: Press <kbd style="background:var(--gray-100);border:1px solid var(--gray-200);padding:1px 5px;border-radius:3px;font-size:11px;">N</kbd> to add a school · <kbd style="background:var(--gray-100);border:1px solid var(--gray-200);padding:1px 5px;border-radius:3px;font-size:11px;">Esc</kbd> to close panels · Click a school name for quick view</div>
       <div class="stats-row" id="partner-stats"></div>
       <div class="toolbar">
         <input type="text" id="p-search" placeholder="Search schools, contacts, city…" oninput="renderPartners()">
@@ -566,6 +618,19 @@ tr:hover td { background: #fdf8f0; }
         <select id="p-country" onchange="renderPartners()">
           <option value="">All countries</option>
         </select>
+        <select id="p-region" onchange="renderPartners()">
+          <option value="">All regions</option>
+          <option>South Asia</option>
+          <option>Southeast Asia</option>
+          <option>East Asia</option>
+          <option>Africa</option>
+          <option>Latin America</option>
+          <option>Middle East</option>
+          <option>Other</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);cursor:pointer;white-space:nowrap;">
+          <input type="checkbox" id="p-show-archived" onchange="renderPartners()"> Show archived
+        </label>
       </div>
       <div class="card" style="margin-bottom:1.25rem;">
         <div class="table-scroll">
@@ -711,7 +776,11 @@ tr:hover td { background: #fdf8f0; }
         </div>
 
         <div style="border-top:1px solid var(--gray-200);margin:1.75rem 0;"></div>
-        <div style="font-size:13px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:1rem;">Danger Zone</div>
+        <div style="font-size:13px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:1rem;">Reports & Exports</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-ghost" onclick="printAnnualSummary()">📄 Print Annual Summary</button>
+        </div>
+        <div style="margin-top:8px;font-size:13px;color:var(--text-muted);">Per-school report cards: open any school's quick view and click Print.</div>
         <button class="btn btn-danger" onclick="clearAllData()">Clear All Data</button>
       </div>
     </div>
@@ -719,6 +788,27 @@ tr:hover td { background: #fdf8f0; }
   </div><!-- /main -->
 </div><!-- /app -->
 
+
+<!-- QUICK VIEW PANEL -->
+<div id="quick-view" class="quick-view">
+  <div class="qv-header">
+    <button class="qv-close" onclick="closeQuickView()">✕</button>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div id="qv-logo-wrap"></div>
+      <div>
+        <div class="qv-title" id="qv-name"></div>
+        <div class="qv-sub" id="qv-sub"></div>
+      </div>
+    </div>
+  </div>
+  <div class="qv-body" id="qv-body"></div>
+  <div class="qv-actions">
+    <button class="btn btn-primary btn-sm" id="qv-edit-btn" onclick="">✏️ Edit</button>
+    <button class="btn btn-ghost btn-sm" id="qv-journal-btn" onclick="">📝 Log</button>
+    <button class="btn btn-ghost btn-sm" id="qv-trip-btn" onclick="">✈️ Plan Trip</button>
+    <button class="btn btn-ghost btn-sm" id="qv-print-btn" onclick="">🖨 Print</button>
+  </div>
+</div>
 
 <!-- JOURNAL ENTRY OVERLAY -->
 <div class="overlay" id="journal-overlay">
@@ -837,8 +927,10 @@ tr:hover td { background: #fdf8f0; }
       <button class="dtab" onclick="switchSFTab(7)">Initiatives & Programs</button>
       <button class="dtab" onclick="switchSFTab(8)">Accreditation</button>
       <button class="dtab" onclick="switchSFTab(9)">Churches Planted</button>
-      <button class="dtab" onclick="switchSFTab(10)">Annual Reports</button>
-      <button class="dtab" onclick="switchSFTab(11)">Notes & Logo</button>
+      <button class="dtab" onclick="switchSFTab(10)">Milestones</button>
+      <button class="dtab" onclick="switchSFTab(11)">Alumni</button>
+      <button class="dtab" onclick="switchSFTab(12)">Annual Reports</button>
+      <button class="dtab" onclick="switchSFTab(13)">Notes & Logo</button>
     </div>
     <div class="drawer-body">
 
@@ -856,7 +948,29 @@ tr:hover td { background: #fdf8f0; }
             </div>
             <div class="form-group"><label>Partnership Originally Established</label><input type="number" id="sf-est-year" placeholder="2019" min="1900" max="2099"></div>
             <div class="form-group"><label>Partnership Last Renewed</label><input type="number" id="sf-renewed-year" placeholder="2024" min="1900" max="2099"></div>
+            <div class="form-group"><label>Region</label>
+              <select id="sf-region">
+                <option value="">— Select region —</option>
+                <option>South Asia</option>
+                <option>Southeast Asia</option>
+                <option>East Asia</option>
+                <option>Africa</option>
+                <option>Latin America</option>
+                <option>Middle East</option>
+                <option>Other</option>
+              </select>
+            </div>
             <div class="form-group"><label>Website</label><input type="url" id="sf-website" placeholder="https://"></div>
+            <div class="form-group" style="display:flex;align-items:center;gap:12px;padding-top:8px;">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;font-size:14px;">
+                <input type="checkbox" id="sf-pinned"> 📌 Pin this school (float to top)
+              </label>
+            </div>
+            <div class="form-group" style="display:flex;align-items:center;gap:12px;">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;font-size:14px;">
+                <input type="checkbox" id="sf-archived"> 📦 Archive (hide from main list)
+              </label>
+            </div>
           </div>
         </div>
         <div class="form-section">
@@ -1113,8 +1227,64 @@ tr:hover td { background: #fdf8f0; }
         <div id="church-list"></div>
       </div>
 
-      <!-- TAB 10: Annual Reports -->
+      <!-- TAB 10: Milestones -->
       <div class="dtab-content" id="sf-tab-10">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+          <div style="font-size:14px;color:var(--text-muted);">Significant firsts and landmark moments for this school</div>
+          <button class="btn btn-gold btn-sm" onclick="toggleMiniForm('ms-form')">+ Add Milestone</button>
+        </div>
+        <div class="mini-form" id="ms-form">
+          <div class="mini-form-grid">
+            <input type="text" id="msf-title" placeholder="Milestone title (e.g. First graduate)">
+            <select id="msf-category">
+              <option>First Graduate</option>
+              <option>First Church Planted</option>
+              <option>First Intern Sent</option>
+              <option>Partnership Established</option>
+              <option>Accreditation Received</option>
+              <option>New Campus</option>
+              <option>Leadership Transition</option>
+              <option>Other</option>
+            </select>
+            <input type="number" id="msf-year" placeholder="Year" min="1900" max="2099">
+            <textarea id="msf-notes" placeholder="Details…"></textarea>
+          </div>
+          <div class="mini-form-actions">
+            <button class="btn btn-ghost btn-sm" onclick="closeMiniForm('ms-form')">Cancel</button>
+            <button class="btn btn-primary btn-sm" id="msf-save-btn" onclick="addMilestone()">Save</button>
+          </div>
+        </div>
+        <input type="hidden" id="msf-editing-id">
+        <div id="ms-list"></div>
+      </div>
+
+      <!-- TAB 11: Alumni -->
+      <div class="dtab-content" id="sf-tab-11">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+          <div style="font-size:14px;color:var(--text-muted);">Notable graduates and where they are serving</div>
+          <button class="btn btn-gold btn-sm" onclick="toggleMiniForm('alumni-form')">+ Add Alumni</button>
+        </div>
+        <div class="mini-form" id="alumni-form">
+          <div class="mini-form-grid">
+            <input type="text" id="alf-name" placeholder="Full name">
+            <input type="number" id="alf-grad-year" placeholder="Graduation year" min="1950" max="2099">
+            <input type="text" id="alf-serving" placeholder="Where serving (church/org name)">
+            <input type="text" id="alf-location" placeholder="City / Country">
+            <input type="text" id="alf-role" placeholder="Role / title">
+            <input type="text" id="alf-planted" placeholder="Churches planted (if any)">
+            <textarea id="alf-notes" placeholder="Notes…"></textarea>
+          </div>
+          <div class="mini-form-actions">
+            <button class="btn btn-ghost btn-sm" onclick="closeMiniForm('alumni-form')">Cancel</button>
+            <button class="btn btn-primary btn-sm" id="alf-save-btn" onclick="addAlumni()">Save</button>
+          </div>
+        </div>
+        <input type="hidden" id="alf-editing-id">
+        <div id="alumni-list"></div>
+      </div>
+
+      <!-- TAB 12: Annual Reports -->
+      <div class="dtab-content" id="sf-tab-12">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
           <div style="font-size:14px;color:var(--text-muted);">Annual reports submitted by the school each January</div>
           <button class="btn btn-gold btn-sm" onclick="toggleMiniForm('ar-form')">+ Add Report</button>
@@ -1170,8 +1340,8 @@ tr:hover td { background: #fdf8f0; }
         <div id="ar-list"></div>
       </div>
 
-      <!-- TAB 11: Notes & Logo -->
-      <div class="dtab-content" id="sf-tab-11">
+      <!-- TAB 13: Notes & Logo -->
+      <div class="dtab-content" id="sf-tab-13">
         <div class="form-section">
           <div class="form-section-title">School Logo</div>
           <div class="logo-area" onclick="document.getElementById('logo-input').click()">
@@ -1274,6 +1444,8 @@ let tempGradCohorts = [];
 let tempDonors = [];
 let tempChurches = [];
 let tempAnnualReports = [];
+let tempMilestones = [];
+let tempAlumni = [];
 let tempLogo = null;
 
 // ── PERSISTENCE ──
@@ -1404,10 +1576,19 @@ function renderPartners() {
   const q = (document.getElementById('p-search')||{value:''}).value.toLowerCase();
   const st = (document.getElementById('p-status')||{value:''}).value;
   const co = (document.getElementById('p-country')||{value:''}).value;
+  const rg = (document.getElementById('p-region')||{value:''}).value;
+  const showArchived = document.getElementById('p-show-archived')?.checked;
+
   let list = DB.schools.filter(s => {
-    const txt = [s.name,s.city,s.country,s.directorName,s.email].join(' ').toLowerCase();
-    return (!q||txt.includes(q)) && (!st||s.status===st) && (!co||s.country===co);
+    if (!showArchived && s.archived) return false;
+    const txt = [s.name,s.city,s.country,s.directorName,s.email,s.region].join(' ').toLowerCase();
+    return (!q||txt.includes(q)) && (!st||s.status===st) && (!co||s.country===co) && (!rg||s.region===rg);
   });
+
+  // Pinned schools float to top
+  list.sort((a,b) => (b.pinned?1:0) - (a.pinned?1:0));
+
+  const thisYear = new Date().getFullYear();
   const tbody = document.getElementById('partners-tbody');
   if (!tbody) return;
   tbody.innerHTML = list.length ? list.map(s=>{
@@ -1416,9 +1597,20 @@ function renderPartners() {
     const visits = (s.visits||[]).map(v=>v.date).filter(d=>d && d <= todayMonth).sort();
     const lastVisit = visits.length ? visits.at(-1) : null;
     const lastVisitDisplay = lastVisit ? timeElapsed(lastVisit) : '—';
+    const yearsPartner = s.estYear ? thisYear - parseInt(s.estYear) : null;
+    const isAnniversary = yearsPartner && yearsPartner > 0 && yearsPartner % 5 === 0;
+    const nameExtra = [
+      s.pinned ? '📌' : '',
+      s.archived ? '<span class="badge badge-archived" style="font-size:11px;margin-left:4px;">Archived</span>' : '',
+      s.region ? `<span class="region-tag">${s.region}</span>` : '',
+      isAnniversary ? `<span class="anniversary-badge" style="margin-left:4px;">🎉 ${yearsPartner}yr</span>` : ''
+    ].filter(Boolean).join('');
     return `
-    <tr>
-      <td><span class="school-name" onclick="openSchoolDetail('${s.id}')">${s.name}</span></td>
+    <tr${s.pinned?' style="background:#fffdf5;"':''}>
+      <td>
+        <span class="school-name" onclick="openQuickView('${s.id}')">${s.name}</span>
+        ${nameExtra}
+      </td>
       <td>${[s.country,s.city].filter(Boolean).join(', ')||'—'}</td>
       <td>${s.directorName||'—'}</td>
       <td>${s.enrollment!=null&&s.enrollment!==''?parseInt(s.enrollment).toLocaleString():'—'}</td>
@@ -1514,6 +1706,8 @@ function openSchoolForm(id) {
   tempDonors = [];
   tempChurches = [];
   tempAnnualReports = [];
+  tempMilestones = [];
+  tempAlumni = [];
   tempLogo = null;
   tempDirectorPhoto = null;
   tempGTPhoto = null;
@@ -1532,6 +1726,8 @@ function openSchoolForm(id) {
     tempDonors = JSON.parse(JSON.stringify(s.donors||[]));
     tempChurches = JSON.parse(JSON.stringify(s.churches||[]));
     tempAnnualReports = JSON.parse(JSON.stringify(s.annualReports||[]));
+    tempMilestones = JSON.parse(JSON.stringify(s.milestones||[]));
+    tempAlumni = JSON.parse(JSON.stringify(s.alumni||[]));
     tempLogo = s.logo||null;
     tempDirectorPhoto = s.directorPhoto||null;
     tempGTPhoto = null;
@@ -1548,6 +1744,8 @@ function openSchoolForm(id) {
   renderDonorList();
   renderChurchList();
   renderAnnualReportList();
+  renderMilestoneList();
+  renderAlumniList();
   updateLogoPreview();
   // update director avatar
   const dw = document.getElementById('director-avatar-wrap');
@@ -1556,6 +1754,10 @@ function openSchoolForm(id) {
 }
 
 function closeSchoolForm() {
+  const name = document.getElementById('sf-name')?.value.trim();
+  if (name && !editingSchoolId) {
+    if (!confirm('You have unsaved changes. Discard them?')) return;
+  }
   document.getElementById('school-form-overlay').classList.remove('open');
   editingSchoolId = null;
 }
@@ -1571,7 +1773,9 @@ function clearSchoolForm() {
    'sf-director-name','sf-director-title','sf-director-email','sf-director-phone','sf-director-bio',
    'sf-enrollment','sf-ft','sf-pt','sf-grads','sf-programs','sf-enroll-year','sf-fac-count','sf-admin-count','sf-founded',
    'sf-reg-no','sf-reg-country','sf-accred-body','sf-accred-level','sf-accred-expiry','sf-last-audit','sf-accred-notes',
-   'sf-notes','sf-est-year','sf-renewed-year'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+   'sf-notes','sf-est-year','sf-renewed-year','sf-region'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  const pin=document.getElementById('sf-pinned'); if(pin) pin.checked=false;
+  const arch=document.getElementById('sf-archived'); if(arch) arch.checked=false;
   document.getElementById('sf-status').value='Active';
   document.getElementById('logo-preview').style.display='none';
   document.getElementById('logo-hint').style.display='';
@@ -1584,7 +1788,9 @@ function clearSchoolForm() {
 
 function populateSchoolForm(s) {
   const set = (id,val) => { const el=document.getElementById(id); if(el&&val!=null) el.value=val; };
-  set('sf-name',s.name); set('sf-overseeing-church',s.overseeingChurch); set('sf-status',s.status); set('sf-est-year',s.estYear); set('sf-renewed-year',s.renewedYear);
+  set('sf-name',s.name); set('sf-overseeing-church',s.overseeingChurch); set('sf-status',s.status); set('sf-est-year',s.estYear); set('sf-renewed-year',s.renewedYear); set('sf-region',s.region||'');
+  const pin=document.getElementById('sf-pinned'); if(pin) pin.checked=!!s.pinned;
+  const arch=document.getElementById('sf-archived'); if(arch) arch.checked=!!s.archived;
   set('sf-website',s.website); set('sf-address',s.address); set('sf-city',s.city); set('sf-state',s.state);
   set('sf-zip',s.zip); set('sf-country',s.country); set('sf-phone',s.phone); set('sf-email',s.email);
   set('sf-director-name',s.directorName); set('sf-director-title',s.directorTitle);
@@ -1604,6 +1810,9 @@ function collectSchoolForm() {
   const g = id => { const el=document.getElementById(id); return el?el.value.trim():''; };
   return {
     name:g('sf-name'), overseeingChurch:g('sf-overseeing-church'), status:g('sf-status'), estYear:g('sf-est-year'), renewedYear:g('sf-renewed-year'),
+    region:g('sf-region'),
+    pinned:document.getElementById('sf-pinned')?.checked||false,
+    archived:document.getElementById('sf-archived')?.checked||false,
     website:g('sf-website'), address:g('sf-address'), city:g('sf-city'), state:g('sf-state'),
     zip:g('sf-zip'), country:g('sf-country'), phone:g('sf-phone'), email:g('sf-email'),
     directorName:g('sf-director-name'), directorTitle:g('sf-director-title'),
@@ -1623,6 +1832,8 @@ function collectSchoolForm() {
     donors: JSON.parse(JSON.stringify(tempDonors)),
     churches: JSON.parse(JSON.stringify(tempChurches)),
     annualReports: JSON.parse(JSON.stringify(tempAnnualReports)),
+    milestones: JSON.parse(JSON.stringify(tempMilestones)),
+    alumni: JSON.parse(JSON.stringify(tempAlumni)),
     logo: tempLogo,
     directorPhoto: tempDirectorPhoto
   };
@@ -1631,6 +1842,9 @@ function collectSchoolForm() {
 function saveSchool() {
   const data = collectSchoolForm();
   if (!data.name) { alert('School name is required.'); switchSFTab(0); return; }
+  if (checkDuplicate()) {
+    if (!confirm(`A school named "${data.name}" already exists. Save anyway?`)) return;
+  }
   if (editingSchoolId) {
     const i = DB.schools.findIndex(x=>x.id===editingSchoolId);
     DB.schools[i] = { ...DB.schools[i], ...data };
@@ -1692,21 +1906,27 @@ const MINI_FORM_FIELDS = {
   'grad-form':   ['grf-year','grf-count','grf-program','grf-notes'],
   'church-form': ['cf-name','cf-planter','cf-year','cf-location','cf-notes'],
   'ar-form': ['ar-year','ar-enrolled','ar-graduated','ar-new-students','ar-programs','ar-churches','ar-placements','ar-outreach','ar-faculty','ar-leadership-details','ar-facility','ar-locations','ar-budget','ar-budget-pct','ar-new-supporters','ar-discontinued-supporters','ar-needs','ar-prayer','ar-comments'],
+  'ms-form': ['msf-title','msf-year','msf-notes'],
+  'alumni-form': ['alf-name','alf-grad-year','alf-serving','alf-location','alf-role','alf-planted','alf-notes'],
 };
 const MINI_FORM_EDIT_IDS = {
   'visit-form':'vf-editing-id','gt-form':'gtf-editing-id','fin-form':'ff-editing-id',
   'donor-form':'df-editing-id','init-form':'if-editing-id','grad-form':'grf-editing-id',
   'church-form':'cf-editing-id',
-  'ar-form':'ar-editing-id'
+  'ar-form':'ar-editing-id',
+  'ms-form':'msf-editing-id',
+  'alumni-form':'alf-editing-id'
 };
 const MINI_FORM_BTN_IDS = {
   'visit-form':'vf-save-btn','gt-form':'gtf-save-btn','fin-form':'ff-save-btn',
   'donor-form':'df-save-btn','init-form':'if-save-btn','grad-form':'grf-save-btn',
-  'church-form':'cf-save-btn','ar-form':'ar-save-btn'
+  'church-form':'cf-save-btn','ar-form':'ar-save-btn',
+  'ms-form':'msf-save-btn','alumni-form':'alf-save-btn'
 };
 const MINI_FORM_BTN_LABELS = {
   'visit-form':'Save Visit','gt-form':'Save','fin-form':'Save',
-  'donor-form':'Save','init-form':'Save','grad-form':'Save Cohort','church-form':'Save','ar-form':'Save Report'
+  'donor-form':'Save','init-form':'Save','grad-form':'Save Cohort',
+  'church-form':'Save','ar-form':'Save Report','ms-form':'Save','alumni-form':'Save'
 };
 
 function miniFormIsDirty(id) {
@@ -2131,6 +2351,235 @@ function renderChurchList(){
     </div>
   `).join('')+'</div>';
 }
+
+// ── QUICK VIEW ──
+function openQuickView(id) {
+  const s = DB.schools.find(x=>x.id===id);
+  if (!s) return;
+  const thisYear = new Date().getFullYear();
+  const yearsPartner = s.estYear ? thisYear - parseInt(s.estYear) : null;
+  const totalGiving = (s.financials||[]).reduce((a,f)=>a+(parseFloat(f.amount)||0),0);
+  const totalGrads = (s.gradCohorts||[]).reduce((a,c)=>a+(parseInt(c.count)||0),0);
+  const totalChurches = (s.churches||[]).length;
+  const totalAlumni = (s.alumni||[]).length;
+  const lastJournal = (s.journal||[]).sort((a,b)=>b.date.localeCompare(a.date))[0];
+  const lastVisitDate = (s.visits||[]).map(v=>v.date).filter(Boolean).sort().at(-1);
+
+  document.getElementById('qv-name').textContent = s.name;
+  document.getElementById('qv-sub').textContent = [s.country, s.city, s.region].filter(Boolean).join(' · ');
+
+  const logoWrap = document.getElementById('qv-logo-wrap');
+  logoWrap.innerHTML = s.logo
+    ? `<img src="${s.logo}" style="width:48px;height:48px;border-radius:8px;object-fit:contain;background:white;border:1px solid rgba(255,255,255,0.2);">`
+    : '';
+
+  // Trend chart data
+  const years = [...new Set([
+    ...(s.gradCohorts||[]).map(c=>c.year),
+    ...(s.annualReports||[]).map(r=>r.year),
+  ])].filter(Boolean).map(Number).sort();
+
+  const trendHTML = years.length >= 2 ? buildTrendChart(s, years) : '';
+
+  document.getElementById('qv-body').innerHTML = `
+    <div class="qv-section">
+      <div class="qv-section-title">Partnership</div>
+      ${qvRow('Status', statusBadge(s.status))}
+      ${qvRow('Established', s.estYear||'—')}
+      ${qvRow('Last Renewed', s.renewedYear||'—')}
+      ${yearsPartner?qvRow('Years partnered', yearsPartner+' years'):''}
+      ${qvRow('Overseeing Church', s.overseeingChurch||'—')}
+    </div>
+    <div class="qv-section">
+      <div class="qv-section-title">Leadership</div>
+      ${qvRow('Director', [s.directorName,s.directorTitle].filter(Boolean).join(', ')||'—')}
+      ${qvRow('Email', s.directorEmail||'—')}
+      ${qvRow('Phone', s.directorPhone||'—')}
+    </div>
+    <div class="qv-section">
+      <div class="qv-section-title">At a Glance</div>
+      ${qvRow('Enrollment', s.enrollment?parseInt(s.enrollment).toLocaleString():'—')}
+      ${qvRow('Total Graduates', totalGrads||'—')}
+      ${qvRow('Churches Planted', totalChurches||'—')}
+      ${qvRow('Alumni Tracked', totalAlumni||'—')}
+      ${qvRow('Total Giving', totalGiving?'$'+totalGiving.toLocaleString('en-US',{maximumFractionDigits:0}):'—')}
+      ${qvRow('Last Site Visit', lastVisitDate?fmtMonth(lastVisitDate):'—')}
+    </div>
+    ${trendHTML ? `<div class="qv-section"><div class="qv-section-title">Trends</div>${trendHTML}</div>` : ''}
+    ${lastJournal ? `<div class="qv-section">
+      <div class="qv-section-title">Latest Journal Entry</div>
+      <div style="font-size:13px;color:var(--text-muted);">${lastJournal.date} · ${lastJournal.category}</div>
+      <div style="font-size:14px;margin-top:4px;line-height:1.5;">${esc(lastJournal.notes.slice(0,200))}${lastJournal.notes.length>200?'…':''}</div>
+    </div>` : ''}
+  `;
+
+  document.getElementById('qv-edit-btn').onclick = () => { closeQuickView(); openSchoolForm(id); };
+  document.getElementById('qv-journal-btn').onclick = () => openJournalOverlay(id);
+  document.getElementById('qv-trip-btn').onclick = () => openQuickTripOverlay(id);
+  document.getElementById('qv-print-btn').onclick = () => printSchoolCard(id);
+  document.getElementById('quick-view').classList.add('open');
+}
+
+function qvRow(label, val) {
+  return `<div class="qv-row"><span class="qv-label">${label}</span><span class="qv-val">${val}</span></div>`;
+}
+
+function closeQuickView() {
+  document.getElementById('quick-view').classList.remove('open');
+}
+
+function buildTrendChart(s, years) {
+  const enrollData = years.map(y => {
+    const r = (s.annualReports||[]).find(r=>parseInt(r.year)===y);
+    return r ? parseInt(r.enrolled)||0 : 0;
+  });
+  const gradData = years.map(y => {
+    const c = (s.gradCohorts||[]).find(c=>parseInt(c.year)===y);
+    return c ? parseInt(c.count)||0 : 0;
+  });
+  const churchData = years.map(y => {
+    return (s.churches||[]).filter(c=>parseInt(c.year)===y).length;
+  });
+
+  const maxE = Math.max(...enrollData, 1);
+  const maxG = Math.max(...gradData, 1);
+  const maxC = Math.max(...churchData, 1);
+
+  const makeBar = (vals, max, cls) => vals.map((v,i) => `
+    <div class="trend-bar-col">
+      <div class="trend-val">${v||''}</div>
+      <div class="trend-bar ${cls}" style="height:${Math.max(4,Math.round((v/max)*60))}px;"></div>
+      <div class="trend-year">${years[i]}</div>
+    </div>`).join('');
+
+  return `
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">📘 Enrolled &nbsp; 🎓 Graduated &nbsp; ⛪ Churches</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+      <div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Enrollment</div>
+        <div class="trend-bar-wrap">${makeBar(enrollData,maxE,'')}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Graduates</div>
+        <div class="trend-bar-wrap">${makeBar(gradData,maxG,'gold')}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Churches</div>
+        <div class="trend-bar-wrap">${makeBar(churchData,maxC,'green')}</div>
+      </div>
+    </div>`;
+}
+
+// ── MILESTONES ──
+function addMilestone(){
+  const id=document.getElementById('msf-editing-id').value;
+  const m={id:id||'m'+Date.now(),title:document.getElementById('msf-title').value.trim(),category:document.getElementById('msf-category').value,year:document.getElementById('msf-year').value,notes:document.getElementById('msf-notes').value.trim()};
+  if(!m.title) return;
+  if(id){const i=tempMilestones.findIndex(x=>x.id===id);tempMilestones[i]=m;}
+  else tempMilestones.push(m);
+  ['msf-title','msf-year','msf-notes','msf-editing-id'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('msf-save-btn').textContent='Save';
+  document.getElementById('ms-form').classList.remove('open');
+  renderMilestoneList();
+}
+function editMilestone(id){
+  const m=tempMilestones.find(x=>x.id===id);if(!m)return;
+  document.getElementById('msf-title').value=m.title||'';
+  document.getElementById('msf-category').value=m.category||'Other';
+  document.getElementById('msf-year').value=m.year||'';
+  document.getElementById('msf-notes').value=m.notes||'';
+  document.getElementById('msf-editing-id').value=id;
+  document.getElementById('msf-save-btn').textContent='Update';
+  document.getElementById('ms-form').classList.add('open');
+}
+function removeMilestone(id){tempMilestones=tempMilestones.filter(m=>m.id!==id);renderMilestoneList();}
+function renderMilestoneList(){
+  const el=document.getElementById('ms-list');if(!el)return;
+  if(!tempMilestones.length){el.innerHTML='<div class="list-empty">No milestones recorded yet.</div>';return;}
+  const sorted=[...tempMilestones].sort((a,b)=>(a.year||0)-(b.year||0));
+  el.innerHTML='<div class="list-card">'+sorted.map(m=>`
+    <div class="list-item">
+      <div style="font-size:20px;flex-shrink:0;">🏆</div>
+      <div class="list-item-main">
+        <div class="list-item-title">${esc(m.title)} ${m.year?`<span style="font-size:12px;color:var(--text-muted);">(${m.year})</span>`:''}</div>
+        <div class="list-item-sub">${m.category}</div>
+        ${m.notes?`<div class="list-item-sub" style="margin-top:3px;">${esc(m.notes)}</div>`:''}
+      </div>
+      <div class="list-actions">
+        <button class="btn-icon" onclick="editMilestone('${m.id}')">✏️</button>
+        <button class="btn-icon danger" onclick="removeMilestone('${m.id}')">🗑</button>
+      </div>
+    </div>`).join('')+'</div>';
+}
+
+// ── ALUMNI ──
+function addAlumni(){
+  const id=document.getElementById('alf-editing-id').value;
+  const a={id:id||'al'+Date.now(),name:document.getElementById('alf-name').value.trim(),gradYear:document.getElementById('alf-grad-year').value,serving:document.getElementById('alf-serving').value.trim(),location:document.getElementById('alf-location').value.trim(),role:document.getElementById('alf-role').value.trim(),planted:document.getElementById('alf-planted').value.trim(),notes:document.getElementById('alf-notes').value.trim()};
+  if(!a.name) return;
+  if(id){const i=tempAlumni.findIndex(x=>x.id===id);tempAlumni[i]=a;}
+  else tempAlumni.push(a);
+  ['alf-name','alf-grad-year','alf-serving','alf-location','alf-role','alf-planted','alf-notes','alf-editing-id'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('alf-save-btn').textContent='Save';
+  document.getElementById('alumni-form').classList.remove('open');
+  renderAlumniList();
+}
+function editAlumni(id){
+  const a=tempAlumni.find(x=>x.id===id);if(!a)return;
+  ['name','gradYear','serving','location','role','planted','notes'].forEach(k=>{
+    const el=document.getElementById('alf-'+k.replace(/([A-Z])/g,'-$1').toLowerCase());
+    if(el)el.value=a[k]||'';
+  });
+  document.getElementById('alf-editing-id').value=id;
+  document.getElementById('alf-save-btn').textContent='Update';
+  document.getElementById('alumni-form').classList.add('open');
+}
+function removeAlumni(id){tempAlumni=tempAlumni.filter(a=>a.id!==id);renderAlumniList();}
+function renderAlumniList(){
+  const el=document.getElementById('alumni-list');if(!el)return;
+  if(!tempAlumni.length){el.innerHTML='<div class="list-empty">No alumni recorded yet.</div>';return;}
+  const sorted=[...tempAlumni].sort((a,b)=>(b.gradYear||0)-(a.gradYear||0));
+  el.innerHTML='<div class="list-card">'+sorted.map(a=>`
+    <div class="list-item">
+      <div class="list-item-main">
+        <div class="list-item-title">${esc(a.name)}${a.gradYear?` <span style="font-size:12px;color:var(--text-muted);">Class of ${a.gradYear}</span>`:''}</div>
+        <div class="list-item-sub">${[a.role,a.serving,a.location].filter(Boolean).join(' · ')||'—'}</div>
+        ${a.planted?`<div class="list-item-sub">⛪ ${esc(a.planted)}</div>`:''}
+        ${a.notes?`<div class="list-item-sub" style="margin-top:3px;">${esc(a.notes)}</div>`:''}
+      </div>
+      <div class="list-actions">
+        <button class="btn-icon" onclick="editAlumni('${a.id}')">✏️</button>
+        <button class="btn-icon danger" onclick="removeAlumni('${a.id}')">🗑</button>
+      </div>
+    </div>`).join('')+'</div>';
+}
+
+// ── DUPLICATE DETECTION ──
+function checkDuplicate() {
+  const name = document.getElementById('sf-name')?.value.trim().toLowerCase();
+  if (!name || editingSchoolId) return false;
+  return DB.schools.some(s => s.name.trim().toLowerCase() === name);
+}
+
+// ── KEYBOARD SHORTCUTS ──
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'Escape') {
+    closeQuickView();
+    closeSchoolForm();
+    closeProspectForm();
+    closeJournalOverlay();
+    closeQuickTripOverlay();
+  }
+  if (e.key === 'n' || e.key === 'N') {
+    if (document.getElementById('page-partners').classList.contains('active')) openSchoolForm();
+    else if (document.getElementById('page-prospects').classList.contains('active')) openProspectForm();
+    else if (document.getElementById('page-journal').classList.contains('active')) {
+      const firstSchool = DB.schools[0];
+      if (firstSchool) openJournalOverlay(firstSchool.id);
+    }
+  }
+});
 
 // ── ANNUAL REPORTS ──
 function addAnnualReport(){
@@ -2657,6 +3106,105 @@ function renderJournal() {
       <div style="font-size:14px;color:var(--text);line-height:1.6;white-space:pre-wrap;">${esc(e.notes)}</div>
     </div>`;
   }).join('')+'</div>';
+}
+
+// ── PRINT / REPORTS ──
+function printSchoolCard(id) {
+  const s = DB.schools.find(x=>x.id===id); if(!s) return;
+  const thisYear = new Date().getFullYear();
+  const totalGiving = (s.financials||[]).reduce((a,f)=>a+(parseFloat(f.amount)||0),0);
+  const totalGrads = (s.gradCohorts||[]).reduce((a,c)=>a+(parseInt(c.count)||0),0);
+  const totalChurches = (s.churches||[]).length;
+  const latestReport = (s.annualReports||[]).sort((a,b)=>b.year-a.year)[0];
+
+  const html = `<!DOCTYPE html><html><head><title>${s.name} — Report Card</title>
+  <style>body{font-family:Georgia,serif;max-width:700px;margin:40px auto;color:#1e1b16;font-size:14px;}
+  h1{font-size:22px;color:#1a2744;margin-bottom:4px;}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:0.06em;color:#c9a84c;margin:20px 0 8px;border-bottom:1px solid #fdf6e3;padding-bottom:4px;}
+  .row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f4f2ee;font-size:13px;}
+  .label{color:#6b6358;}.val{font-weight:500;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:0 24px;}
+  p{margin:6px 0;font-size:13px;line-height:1.6;}
+  @media print{body{margin:20px;}</style></head><body>
+  <h1>${s.name}</h1>
+  <p style="color:#6b6358;">${[s.country,s.city,s.region].filter(Boolean).join(' · ')} &nbsp;·&nbsp; Partnership est. ${s.estYear||'—'}</p>
+  <h2>Contact</h2>
+  <div class="grid">
+    <div><div class="row"><span class="label">Director</span><span class="val">${s.directorName||'—'}</span></div>
+    <div class="row"><span class="label">Email</span><span class="val">${s.directorEmail||'—'}</span></div>
+    <div class="row"><span class="label">Phone</span><span class="val">${s.directorPhone||'—'}</span></div></div>
+    <div><div class="row"><span class="label">Address</span><span class="val">${[s.address,s.city,s.country].filter(Boolean).join(', ')||'—'}</span></div>
+    <div class="row"><span class="label">Website</span><span class="val">${s.website||'—'}</span></div></div>
+  </div>
+  <h2>At a Glance</h2>
+  <div class="grid">
+    <div>
+      <div class="row"><span class="label">Current Enrollment</span><span class="val">${s.enrollment||'—'}</span></div>
+      <div class="row"><span class="label">Total Graduates</span><span class="val">${totalGrads||'—'}</span></div>
+      <div class="row"><span class="label">Churches Planted</span><span class="val">${totalChurches||'—'}</span></div>
+    </div>
+    <div>
+      <div class="row"><span class="label">Total Giving</span><span class="val">${totalGiving?'$'+totalGiving.toLocaleString('en-US',{maximumFractionDigits:0}):'—'}</span></div>
+      <div class="row"><span class="label">Faculty</span><span class="val">${s.facCount||'—'}</span></div>
+      <div class="row"><span class="label">Founded</span><span class="val">${s.founded||'—'}</span></div>
+    </div>
+  </div>
+  ${latestReport ? `<h2>Latest Annual Report (${latestReport.year})</h2>
+  <div class="grid">
+    <div><div class="row"><span class="label">Enrolled</span><span class="val">${latestReport.enrolled||'—'}</span></div>
+    <div class="row"><span class="label">Graduated</span><span class="val">${latestReport.graduated||'—'}</span></div>
+    <div class="row"><span class="label">Budget</span><span class="val">${latestReport.budget?'$'+parseInt(latestReport.budget).toLocaleString():'—'}</span></div></div>
+    <div><div class="row"><span class="label">Churches Planted</span><span class="val">${latestReport.churches||'—'}</span></div>
+    <div class="row"><span class="label">Faculty</span><span class="val">${latestReport.faculty||'—'}</span></div>
+    <div class="row"><span class="label">% Budget Funded</span><span class="val">${latestReport.budgetPct||'—'}</span></div></div>
+  </div>
+  ${latestReport.needs?`<h2>Current Needs</h2><p>${latestReport.needs}</p>`:''}
+  ${latestReport.prayer?`<h2>Prayer Requests</h2><p>${latestReport.prayer}</p>`:''}` : ''}
+  ${s.notes?`<h2>Notes</h2><p>${s.notes}</p>`:''}
+  <p style="margin-top:30px;font-size:11px;color:#b0a898;">Generated ${new Date().toLocaleDateString()} · Ministry Partner Schools Database</p>
+  <script>window.print();<\/script></body></html>`;
+
+  const w = window.open('','_blank');
+  w.document.write(html);
+  w.document.close();
+}
+
+function printAnnualSummary() {
+  const thisYear = new Date().getFullYear() - 1;
+  const active = DB.schools.filter(s=>s.status==='Active');
+  const totalGiving = DB.schools.reduce((sum,s)=>sum+(s.financials||[]).reduce((a,f)=>a+(parseFloat(f.amount)||0),0),0);
+  const totalGrads = DB.schools.reduce((sum,s)=>sum+(s.gradCohorts||[]).filter(c=>parseInt(c.year)>=2020).reduce((a,c)=>a+(parseInt(c.count)||0),0),0);
+  const totalChurches = DB.schools.reduce((sum,s)=>sum+(s.churches||[]).filter(c=>parseInt(c.year)>=2020).length,0);
+
+  const rows = DB.schools.map(s=>{
+    const r = (s.annualReports||[]).find(r=>parseInt(r.year)===thisYear);
+    return `<tr><td>${s.name}</td><td>${s.country||'—'}</td><td>${r?r.enrolled:'—'}</td><td>${r?r.graduated:'—'}</td><td>${r?r.churches:'—'}</td><td>${r?r.needs||'—':'—'}</td></tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><head><title>Annual Summary ${thisYear}</title>
+  <style>body{font-family:Georgia,serif;max-width:900px;margin:40px auto;color:#1e1b16;font-size:13px;}
+  h1{font-size:22px;color:#1a2744;}h2{font-size:13px;text-transform:uppercase;letter-spacing:0.06em;color:#c9a84c;margin:20px 0 8px;}
+  table{width:100%;border-collapse:collapse;}th{background:#f4f2ee;padding:8px;text-align:left;font-size:12px;border-bottom:2px solid #e8e4dc;}
+  td{padding:7px 8px;border-bottom:1px solid #f4f2ee;font-size:12px;}
+  .stat{display:inline-block;margin:0 20px 10px 0;}<\/style></head><body>
+  <h1>Ministry Partner Schools — Annual Summary</h1>
+  <p style="color:#6b6358;">Report year: ${thisYear} &nbsp;·&nbsp; Generated ${new Date().toLocaleDateString()}</p>
+  <h2>Overview</h2>
+  <div>
+    <span class="stat"><strong>${DB.schools.length}</strong> partner schools</span>
+    <span class="stat"><strong>${active.length}</strong> active</span>
+    <span class="stat"><strong>$${totalGiving.toLocaleString('en-US',{maximumFractionDigits:0})}</strong> total giving</span>
+    <span class="stat"><strong>${totalGrads.toLocaleString()}</strong> graduates since 2020</span>
+    <span class="stat"><strong>${totalChurches}</strong> churches planted since 2020</span>
+  </div>
+  <h2>School-by-School (${thisYear} Annual Reports)</h2>
+  <table><thead><tr><th>School</th><th>Country</th><th>Enrolled</th><th>Graduated</th><th>Churches Planted</th><th>Current Needs</th></tr></thead>
+  <tbody>${rows}</tbody></table>
+  <script>window.print();<\/script></body></html>`;
+
+  const w = window.open('','_blank');
+  w.document.write(html);
+  w.document.close();
 }
 
 // ── UTILS ──
