@@ -1574,21 +1574,33 @@ function load() {
 const DEFAULT_PASSWORD_HASH = 'fc393211cf253a76ddb2b7428427127420120edce4072e18e44d6f387ca47a0f';
 
 async function hashPassword(pwd) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pwd));
-  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  try {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pwd));
+    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  } catch(e) {
+    // Fallback for non-secure contexts (shouldn't happen on GitHub Pages)
+    console.warn('crypto.subtle unavailable, using fallback');
+    return btoa(pwd); // simple fallback
+  }
 }
 
 async function tryLogin() {
   const v = document.getElementById('pwd-input').value;
-  const hash = await hashPassword(v);
-  const storedHash = DB.passwordHash || DEFAULT_PASSWORD_HASH;
-  if (hash === storedHash) {
-    document.getElementById('auth-screen').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    refreshAll();
-  } else {
-    document.getElementById('auth-error').textContent = 'Incorrect password.';
-    document.getElementById('pwd-input').value = '';
+  const errEl = document.getElementById('auth-error');
+  try {
+    const hash = await hashPassword(v);
+    const storedHash = DB.passwordHash || DEFAULT_PASSWORD_HASH;
+    if (hash === storedHash) {
+      document.getElementById('auth-screen').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      refreshAll();
+    } else {
+      errEl.textContent = 'Incorrect password.';
+      document.getElementById('pwd-input').value = '';
+    }
+  } catch(e) {
+    errEl.textContent = 'Login error: ' + e.message;
+    console.error('Login error:', e);
   }
 }
 
