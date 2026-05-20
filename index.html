@@ -2600,33 +2600,22 @@ function renderQTLegs() {
 function searchFlights() {
   const legs = qtLegs.filter(l=>l.from&&l.to);
   if (legs.length < 1) { alert('Please fill in at least one leg (From and To).'); return; }
-
-  const legSummary = legs.map(l=>`${l.from} → ${l.to}${l.date?' ('+l.date+')':''}`).join(' · ');
   const note = document.getElementById('qt-flight-note');
 
-  if (legs.length === 1) {
-    const l = legs[0];
-    let url = `https://www.google.com/travel/flights?q=Flights+from+${l.from}+to+${l.to}`;
-    if (l.date) url += `+on+${l.date}`;
-    window.open(url, '_blank');
-  } else {
-    // Google Flights multi-city: encode legs into the flt hash format
-    // Format: origin1.dest1.date1;origin2.dest2.date2;tt:m
-    const flt = legs.map(l=>`${l.from}.${l.to}${l.date?'.'+l.date:''}`).join(';');
-    const url = `https://www.google.com/travel/flights#flt=${flt};tt:m`;
-    window.open(url, '_blank');
-  }
+  // Always open Google Flights multi-city landing page
+  window.open('https://www.google.com/travel/flights?hl=en', '_blank');
 
-  // Show route summary below button
+  // Show numbered route summary for easy manual entry
   if (note) {
-    note.innerHTML = `<strong>Route:</strong> ${legSummary} &nbsp;|&nbsp;
-      <span style="font-size:12px;">If Google Flights doesn't load multi-city automatically, click <strong>Multi-city</strong> on the page and enter legs above.</span>`;
+    note.innerHTML = `<strong>Enter this route on Google Flights:</strong><br>
+      <span style="font-size:12px;color:var(--text-muted);">Click <strong>Multi-city</strong> on the page, then add each leg:</span><br><br>
+      ${legs.map((l,i)=>`<span style="display:block;padding:3px 0;"><strong style="color:var(--navy);">${i+1}.</strong> &nbsp;${l.from} → ${l.to}${l.date?' &nbsp;·&nbsp; '+l.date:''}</span>`).join('')}`;
     note.style.display = 'block';
   }
 }
 
 function openChaseTravel() {
-  window.open('https://travel.chase.com/trips/flights', '_blank');
+  window.open('https://www.chase.com/travel', '_blank');
 }
 
 function saveQuickTrip() {
