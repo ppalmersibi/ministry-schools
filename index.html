@@ -6,6 +6,7 @@
 <title>Ministry Training Partner Schools</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <style>
 :root {
   --navy: #1a2744;
@@ -551,6 +552,42 @@ tr:hover td { background: #fdf8f0; }
 .trend-year { font-size: 10px; color: var(--text-muted); }
 .trend-val { font-size: 10px; color: var(--text-muted); }
 
+/* ── AUTOCOMPLETE ── */
+.ac-wrap { position: relative; }
+.ac-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  box-shadow: var(--shadow);
+  z-index: 999;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.ac-item {
+  padding: 8px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ac-item:hover { background: var(--gray-100); }
+.ac-item-new { color: var(--gold); font-style: italic; }
+.ac-remove { font-size: 12px; color: var(--gray-400); background: none; border: none; cursor: pointer; padding: 2px 4px; border-radius: 3px; }
+.ac-remove:hover { background: var(--danger-light); color: var(--danger); }
+
+/* ── SORTABLE TABLE ── */
+th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.sortable:hover { color: var(--navy); }
+th.sort-asc::after { content: ' ↑'; color: var(--gold); }
+th.sort-desc::after { content: ' ↓'; color: var(--gold); }
+
 @media (max-width: 640px) {
   .form-grid, .form-grid.cols-3 { grid-template-columns: 1fr; }
   .form-group.full { grid-column: 1; }
@@ -586,6 +623,7 @@ tr:hover td { background: #fdf8f0; }
       <button class="nav-btn active" onclick="showPage('partners')">Partner Schools</button>
       <button class="nav-btn" onclick="showPage('prospects')">Prospective</button>
       <button class="nav-btn" onclick="showPage('journal')">Journal</button>
+      <button class="nav-btn" onclick="showPage('network')">Network</button>
       <button class="nav-btn" onclick="showPage('settings')">Settings</button>
     </div>
     <div class="topbar-right">
@@ -636,13 +674,13 @@ tr:hover td { background: #fdf8f0; }
         <div class="table-scroll">
           <table>
             <thead><tr>
-              <th>School name</th>
-              <th>Country / City</th>
-              <th>Director / Dean</th>
-              <th>Enrollment</th>
-              <th>Last renewed</th>
-              <th>Last site visit</th>
-              <th>Status</th>
+              <th class="sortable" onclick="setSort('name')">School name</th>
+              <th class="sortable" onclick="setSort('country')">Country / City</th>
+              <th class="sortable" onclick="setSort('director')">Director / Dean</th>
+              <th class="sortable" onclick="setSort('enrollment')">Enrollment</th>
+              <th class="sortable" onclick="setSort('renewed')">Last renewed</th>
+              <th class="sortable" onclick="setSort('visit')">Last site visit</th>
+              <th class="sortable" onclick="setSort('status')">Status</th>
               <th>Journal</th>
               <th></th>
             </tr></thead>
@@ -729,6 +767,55 @@ tr:hover td { background: #fdf8f0; }
       <div id="journal-list"></div>
     </div>
 
+    <!-- NETWORK -->
+    <div class="page" id="page-network">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Relationship Network</div>
+          <div class="page-sub">Click nodes to explore · Drag to reposition · Scroll to zoom</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="net-show-donors" checked onchange="renderNetwork()"> Donors
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="net-show-teachers" checked onchange="renderNetwork()"> Guest Teachers
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="net-show-faculty" checked onchange="renderNetwork()"> Faculty
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="net-show-alumni" checked onchange="renderNetwork()"> Alumni
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="net-show-prospects" checked onchange="renderNetwork()"> Prospects
+          </label>
+          <button class="btn btn-ghost btn-sm" onclick="resetNetworkZoom()">Reset view</button>
+        </div>
+      </div>
+      <!-- Legend -->
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:1rem;font-size:12px;color:var(--text-muted);">
+        <span>🔵 School</span>
+        <span>🟡 Prospect</span>
+        <span>🟢 Director/Dean</span>
+        <span>🟣 Faculty</span>
+        <span>🟠 Guest Teacher</span>
+        <span>🔴 Donor</span>
+        <span>⚪ Alumni</span>
+      </div>
+      <div style="position:relative;border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--gray-200);background:var(--gray-100);">
+        <svg id="network-svg" style="width:100%;height:600px;display:block;"></svg>
+        <!-- Node detail panel -->
+        <div id="net-detail" style="display:none;position:absolute;top:12px;right:12px;width:240px;background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:14px;font-size:13px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+            <div id="net-detail-title" style="font-weight:600;font-size:14px;color:var(--navy);line-height:1.3;"></div>
+            <button onclick="document.getElementById('net-detail').style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:16px;line-height:1;flex-shrink:0;">✕</button>
+          </div>
+          <div id="net-detail-body" style="color:var(--text-muted);line-height:1.6;"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- SETTINGS -->
     <div class="page" id="page-settings">
       <div class="page-header">
@@ -781,6 +868,15 @@ tr:hover td { background: #fdf8f0; }
           <button class="btn btn-ghost" onclick="printAnnualSummary()">📄 Print Annual Summary</button>
         </div>
         <div style="margin-top:8px;font-size:13px;color:var(--text-muted);">Per-school report cards: open any school's quick view and click Print.</div>
+        <div style="border-top:1px solid var(--gray-200);margin:1.75rem 0;"></div>
+        <div style="font-size:13px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:0.5rem;">Saved Names</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">Names auto-saved from entries. Click × to remove.</div>
+        <div id="people-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;"></div>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="add-person-input" placeholder="Add a name manually" style="flex:1;padding:7px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:13px;font-family:inherit;" onkeydown="if(event.key==='Enter')addPersonManually()">
+          <button class="btn btn-ghost btn-sm" onclick="addPersonManually()">Add</button>
+        </div>
+        <div style="border-top:1px solid var(--gray-200);margin:1.75rem 0;"></div>
         <button class="btn btn-danger" onclick="clearAllData()">Clear All Data</button>
       </div>
     </div>
@@ -839,13 +935,12 @@ tr:hover td { background: #fdf8f0; }
         </div>
         <div class="form-group full">
           <label>With Whom</label>
-          <select id="je-with-whom-select" onchange="handleWithWhomSelect()">
-            <option value="">— Select or type below —</option>
-          </select>
-        </div>
-        <div class="form-group full">
-          <label>Or type a name</label>
-          <input type="text" id="je-with-whom" placeholder="Name of person(s)">
+          <div class="ac-wrap">
+            <input type="text" id="je-with-whom" placeholder="Type a name…" autocomplete="off"
+              oninput="acInput(this,'je-with-whom-drop')"
+              onblur="setTimeout(()=>acHide('je-with-whom-drop'),200)">
+            <div class="ac-dropdown" id="je-with-whom-drop" style="display:none;"></div>
+          </div>
         </div>
         <div class="form-group full">
           <label>Notes *</label>
@@ -890,7 +985,12 @@ tr:hover td { background: #fdf8f0; }
           </div>
           <div class="form-group full">
             <label>Attendees (from our side)</label>
-            <input type="text" id="qt-attendees" placeholder="Who is travelling?">
+            <div class="ac-wrap">
+              <input type="text" id="qt-attendees" placeholder="Who is travelling?" autocomplete="off"
+                oninput="acInput(this,'qt-attendees-drop')"
+                onblur="setTimeout(()=>acHide('qt-attendees-drop'),200)">
+              <div class="ac-dropdown" id="qt-attendees-drop" style="display:none;"></div>
+            </div>
           </div>
           <div class="form-group full">
             <label>Notes</label>
@@ -1071,7 +1171,12 @@ tr:hover td { background: #fdf8f0; }
           <div class="mini-form-grid">
             <input type="month" id="vf-date">
             <input type="text" id="vf-purpose" placeholder="Purpose / type of visit">
-            <input type="text" id="vf-attendees" placeholder="Who attended (from our side)">
+            <div class="ac-wrap" style="grid-column:1/-1;">
+              <input type="text" id="vf-attendees" placeholder="Who attended (from our side)" autocomplete="off"
+                oninput="acInput(this,'vf-attendees-drop')"
+                onblur="setTimeout(()=>acHide('vf-attendees-drop'),200)">
+              <div class="ac-dropdown" id="vf-attendees-drop" style="display:none;"></div>
+            </div>
             <textarea id="vf-notes" placeholder="Visit notes, outcomes, follow-ups…"></textarea>
           </div>
           <div class="mini-form-actions">
@@ -1099,7 +1204,12 @@ tr:hover td { background: #fdf8f0; }
             </div>
           </div>
           <div class="mini-form-grid">
-            <input type="text" id="gtf-name" placeholder="Name">
+            <div class="ac-wrap">
+              <input type="text" id="gtf-name" placeholder="Name" autocomplete="off"
+                oninput="acInput(this,'gtf-name-drop')"
+                onblur="setTimeout(()=>acHide('gtf-name-drop'),200)">
+              <div class="ac-dropdown" id="gtf-name-drop" style="display:none;"></div>
+            </div>
             <select id="gtf-type"><option>Guest Teacher</option><option>Intern</option><option>Speaker</option><option>Trainer</option></select>
             <input type="month" id="gtf-from" placeholder="From date">
             <input type="month" id="gtf-to" placeholder="To date">
@@ -1147,9 +1257,9 @@ tr:hover td { background: #fdf8f0; }
         </div>
         <div class="mini-form" id="donor-form">
           <div class="mini-form-grid">
-            <input type="text" id="df-name" placeholder="Name / Organization">
+            <div class="ac-wrap"><input type="text" id="df-name" placeholder="Name / Organization" autocomplete="off" oninput="acInput(this,'df-name-drop')" onblur="setTimeout(()=>acHide('df-name-drop'),200)"><div class="ac-dropdown" id="df-name-drop" style="display:none;"></div></div>
             <select id="df-type"><option>Individual</option><option>Church</option><option>Organization</option><option>Foundation</option><option>Anonymous</option></select>
-            <input type="text" id="df-contact" placeholder="Contact person (if org)">
+            <div class="ac-wrap"><input type="text" id="df-contact" placeholder="Contact person (if org)" autocomplete="off" oninput="acInput(this,'df-contact-drop')" onblur="setTimeout(()=>acHide('df-contact-drop'),200)"><div class="ac-dropdown" id="df-contact-drop" style="display:none;"></div></div>
             <input type="email" id="df-email" placeholder="Email">
             <input type="tel" id="df-phone" placeholder="Phone">
             <input type="text" id="df-giving" placeholder="Giving level / amount (e.g. $500/yr)">
@@ -1266,7 +1376,7 @@ tr:hover td { background: #fdf8f0; }
         </div>
         <div class="mini-form" id="alumni-form">
           <div class="mini-form-grid">
-            <input type="text" id="alf-name" placeholder="Full name">
+            <div class="ac-wrap"><input type="text" id="alf-name" placeholder="Full name" autocomplete="off" oninput="acInput(this,'alf-name-drop')" onblur="setTimeout(()=>acHide('alf-name-drop'),200)"><div class="ac-dropdown" id="alf-name-drop" style="display:none;"></div></div>
             <input type="number" id="alf-grad-year" placeholder="Graduation year" min="1950" max="2099">
             <input type="text" id="alf-serving" placeholder="Where serving (church/org name)">
             <input type="text" id="alf-location" placeholder="City / Country">
@@ -1428,13 +1538,16 @@ tr:hover td { background: #fdf8f0; }
 let DB = {
   schools: [],
   prospects: [],
-  activity: []
+  activity: [],
+  people: []
 };
 
 let editingSchoolId = null;
 let editingProspectId = null;
 let currentSchoolId = null;
 let sfTabIndex = 0;
+let sortCol = 'name';
+let sortDir = 'asc';
 let tempFaculty = [];
 let tempVisits = [];
 let tempGuestTeachers = [];
@@ -1518,6 +1631,8 @@ function showPage(id) {
   if (id==='partners') renderPartners();
   if (id==='prospects') renderProspects();
   if (id==='journal') renderJournal();
+  if (id==='network') renderNetwork();
+  if (id==='settings') renderPeopleList();
 }
 
 // ── REFRESH ──
@@ -1563,6 +1678,30 @@ function timeElapsed(dateStr) {
   return `<span style="${color}padding:2px 9px;border-radius:99px;font-size:12px;font-weight:500;white-space:nowrap;">${label}</span>`;
 }
 
+function setSort(col) {
+  if (sortCol === col) { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; }
+  else { sortCol = col; sortDir = 'asc'; }
+  renderPartners();
+}
+
+function getSortValue(s, col) {
+  const now = new Date();
+  const todayMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  switch(col) {
+    case 'name': return s.name?.toLowerCase()||'';
+    case 'country': return [s.country,s.city].filter(Boolean).join('').toLowerCase();
+    case 'director': return s.directorName?.toLowerCase()||'';
+    case 'enrollment': return parseInt(s.enrollment)||0;
+    case 'renewed': return parseInt(s.renewedYear)||0;
+    case 'visit': {
+      const visits = (s.visits||[]).map(v=>v.date).filter(d=>d&&d<=todayMonth).sort();
+      return visits.at(-1)||'';
+    }
+    case 'status': return s.status?.toLowerCase()||'';
+    default: return '';
+  }
+}
+
 // ── PARTNERS ──
 function populateCountryFilter() {
   const sel = document.getElementById('p-country');
@@ -1585,8 +1724,21 @@ function renderPartners() {
     return (!q||txt.includes(q)) && (!st||s.status===st) && (!co||s.country===co) && (!rg||s.region===rg);
   });
 
-  // Pinned schools float to top
-  list.sort((a,b) => (b.pinned?1:0) - (a.pinned?1:0));
+  // Pinned schools float to top, then apply sort
+  list.sort((a,b) => {
+    if (b.pinned !== a.pinned) return (b.pinned?1:0) - (a.pinned?1:0);
+    const av = getSortValue(a, sortCol);
+    const bv = getSortValue(b, sortCol);
+    if (typeof av === 'number') return sortDir==='asc' ? av-bv : bv-av;
+    return sortDir==='asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+  });
+
+  // Update header classes
+  document.querySelectorAll('th.sortable').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    const col = th.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
+    if (col === sortCol) th.classList.add(sortDir==='asc'?'sort-asc':'sort-desc');
+  });
 
   const thisYear = new Date().getFullYear();
   const tbody = document.getElementById('partners-tbody');
@@ -1968,6 +2120,7 @@ function addVisit() {
     notes:document.getElementById('vf-notes').value.trim()
   };
   if (!v.date && !v.purpose) return;
+  if (v.attendees) savePerson(v.attendees);
   if (id) { const i=tempVisits.findIndex(x=>x.id===id); tempVisits[i]=v; }
   else tempVisits.push(v);
   ['vf-date','vf-purpose','vf-attendees','vf-notes','vf-editing-id'].forEach(id=>document.getElementById(id).value='');
@@ -2073,6 +2226,7 @@ function addGuestTeacher() {
   const id=document.getElementById('gtf-editing-id').value;
   const g={id:id||'g'+Date.now(),name:document.getElementById('gtf-name').value.trim(),type:document.getElementById('gtf-type').value,from:document.getElementById('gtf-from').value,to:document.getElementById('gtf-to').value,subject:document.getElementById('gtf-subject').value.trim(),notes:document.getElementById('gtf-notes').value.trim(),photo:tempGTPhoto};
   if(!g.name) return;
+  if(g.name) savePerson(g.name);
   if(id){const i=tempGuestTeachers.findIndex(x=>x.id===id);tempGuestTeachers[i]=g;}
   else tempGuestTeachers.push(g);
   ['gtf-name','gtf-from','gtf-to','gtf-subject','gtf-notes','gtf-editing-id'].forEach(id=>document.getElementById(id).value='');
@@ -2517,6 +2671,7 @@ function addAlumni(){
   const id=document.getElementById('alf-editing-id').value;
   const a={id:id||'al'+Date.now(),name:document.getElementById('alf-name').value.trim(),gradYear:document.getElementById('alf-grad-year').value,serving:document.getElementById('alf-serving').value.trim(),location:document.getElementById('alf-location').value.trim(),role:document.getElementById('alf-role').value.trim(),planted:document.getElementById('alf-planted').value.trim(),notes:document.getElementById('alf-notes').value.trim()};
   if(!a.name) return;
+  savePerson(a.name);
   if(id){const i=tempAlumni.findIndex(x=>x.id===id);tempAlumni[i]=a;}
   else tempAlumni.push(a);
   ['alf-name','alf-grad-year','alf-serving','alf-location','alf-role','alf-planted','alf-notes','alf-editing-id'].forEach(id=>document.getElementById(id).value='');
@@ -2691,7 +2846,7 @@ async function syncFromSheets() {
       'Comments': 'comments',
     };
 
-    let imported = 0, skipped = 0, noMatch = [];
+    let imported = 0, skipped = 0, noMatch = [], toApply = [];
     rows.forEach((rawRow, i) => {
       const row = {};
       Object.entries(colMap).forEach(([col, key]) => {
@@ -2705,6 +2860,7 @@ async function syncFromSheets() {
       const report = { id: 'ar' + Date.now() + i, ...row };
       if (existingIdx >= 0) { school.annualReports[existingIdx] = report; }
       else { school.annualReports.push(report); }
+      toApply.push({ school, report });
       imported++;
     });
     save();
@@ -2715,6 +2871,11 @@ async function syncFromSheets() {
     if (noMatch.length) msg += ` No match found for: ${[...new Set(noMatch)].join(', ')}`;
     statusEl.style.color = imported > 0 ? 'var(--success)' : 'var(--warn)';
     statusEl.textContent = msg;
+
+    // Offer to apply updates to school records
+    if (toApply.length > 0) {
+      setTimeout(() => offerApplyReports(toApply), 400);
+    }
   } catch(err) {
     statusEl.style.color = 'var(--danger)';
     statusEl.textContent = `Error: ${err.message}`;
@@ -2756,21 +2917,20 @@ function importAnnualReportCSV(e){
       'Prayer Requests':'prayer',
       'Comments':'comments',
     };
-    let imported=0, skipped=0, noMatch=[];
+    let imported=0, skipped=0, noMatch=[], toApply=[];
     for(let i=1;i<lines.length;i++){
       const vals=parseRow(lines[i]);
       const row={};
       headers.forEach((h,idx)=>{const key=colMap[h];if(key)row[key]=vals[idx]?vals[idx].replace(/^"|"$/g,'').trim():'';});
       if(!row.school||!row.year){skipped++;continue;}
-      // Match to school by name (case-insensitive, trimmed)
       const school=DB.schools.find(s=>s.name.trim().toLowerCase()===row.school.trim().toLowerCase());
       if(!school){noMatch.push(row.school);skipped++;continue;}
       if(!school.annualReports) school.annualReports=[];
-      // Replace existing report for same year or add new
       const existingIdx=school.annualReports.findIndex(r=>String(r.year)===String(row.year));
       const report={id:'ar'+Date.now()+i,...row};
       if(existingIdx>=0){school.annualReports[existingIdx]=report;}
       else{school.annualReports.push(report);}
+      toApply.push({school, report});
       imported++;
     }
     save();
@@ -2778,13 +2938,122 @@ function importAnnualReportCSV(e){
     if(skipped) msg+=` ${skipped} row(s) skipped.`;
     if(noMatch.length) msg+=`\n\nNo matching school found for:\n${[...new Set(noMatch)].join('\n')}`;
     alert(msg);
+    if(toApply.length>0) setTimeout(()=>offerApplyReports(toApply), 400);
   };
   reader.readAsText(file);
   e.target.value='';
 }
 
 // ── LOGO ──
-function handleLogo(e){
+// ── AUTO-APPLY REPORTS ──
+function offerApplyReports(toApply) {
+  // Build a summary of what would be updated
+  const lines = toApply.map(({school, report}) => {
+    const updates = getReportUpdates(school, report);
+    if (!updates.length) return null;
+    return `${school.name} (${report.year}):\n  ${updates.map(u=>u.label).join('\n  ')}`;
+  }).filter(Boolean);
+
+  if (!lines.length) return; // nothing to update
+
+  const msg = `The following school records can be auto-updated from the imported reports:\n\n${lines.join('\n\n')}\n\nApply these updates now?`;
+  if (!confirm(msg)) return;
+
+  toApply.forEach(({school, report}) => applyReportToSchool(school, report));
+  save();
+  refreshAll();
+  alert('✅ School records updated successfully.');
+}
+
+function getReportUpdates(school, report) {
+  const updates = [];
+  if (report.enrolled && report.enrolled !== String(school.enrollment||''))
+    updates.push({label:`Enrollment: ${school.enrollment||'—'} → ${report.enrolled}`, key:'enrollment', val:report.enrolled});
+  if (report.faculty && report.faculty !== String(school.facCount||''))
+    updates.push({label:`Faculty count: ${school.facCount||'—'} → ${report.faculty}`, key:'facCount', val:report.faculty});
+  if (report.graduated && parseInt(report.graduated) > 0) {
+    const existing = (school.gradCohorts||[]).find(c=>String(c.year)===String(report.year));
+    if (!existing) updates.push({label:`Add grad cohort: ${report.graduated} graduates in ${report.year}`, key:'gradCohort', val:report.graduated});
+  }
+  if (report.churches && parseInt(report.churches) > 0) {
+    const existingChurches = (school.churches||[]).filter(c=>String(c.year)===String(report.year)).length;
+    const newCount = parseInt(report.churches) - existingChurches;
+    if (newCount > 0) updates.push({label:`Add ${newCount} church(es) planted in ${report.year}`, key:'churches', val:newCount});
+  }
+  if (report.leadershipChanged === 'Yes' && report.leadershipDetails) {
+    updates.push({label:`Log leadership change as journal entry`, key:'journalLeadership', val:report.leadershipDetails});
+  }
+  if (report.newSupporters) {
+    updates.push({label:`Note new supporters: ${report.newSupporters.slice(0,60)}${report.newSupporters.length>60?'…':''}`, key:'journalSupporters', val:report.newSupporters});
+  }
+  return updates;
+}
+
+function applyReportToSchool(school, report) {
+  const updates = getReportUpdates(school, report);
+  updates.forEach(u => {
+    switch(u.key) {
+      case 'enrollment':
+        school.enrollment = u.val;
+        school.enrollYear = report.year;
+        break;
+      case 'facCount':
+        school.facCount = u.val;
+        break;
+      case 'gradCohort':
+        if (!school.gradCohorts) school.gradCohorts = [];
+        school.gradCohorts.push({
+          id: 'gc'+Date.now()+Math.random(),
+          year: report.year,
+          count: u.val,
+          program: '',
+          notes: `Auto-added from ${report.year} annual report`
+        });
+        break;
+      case 'churches': {
+        if (!school.churches) school.churches = [];
+        for (let i = 0; i < u.val; i++) {
+          school.churches.push({
+            id: 'ch'+Date.now()+Math.random(),
+            name: `Church planted ${report.year} (#${i+1})`,
+            planter: '',
+            year: report.year,
+            location: school.country||'',
+            notes: `Auto-added from ${report.year} annual report. Edit to add details.`
+          });
+        }
+        break;
+      }
+      case 'journalLeadership':
+        if (!school.journal) school.journal = [];
+        school.journal.push({
+          id: 'j'+Date.now()+Math.random(),
+          date: `${report.year}-01-01`,
+          category: '📝 General',
+          withWhom: '',
+          notes: `Leadership change reported in ${report.year} annual report:\n${u.val}`,
+          schoolId: school.id,
+          schoolName: school.name
+        });
+        break;
+      case 'journalSupporters':
+        if (!school.journal) school.journal = [];
+        school.journal.push({
+          id: 'j'+Date.now()+Math.random(),
+          date: `${report.year}-01-01`,
+          category: '📝 General',
+          withWhom: '',
+          notes: `New supporters reported in ${report.year} annual report:\n${u.val}`,
+          schoolId: school.id,
+          schoolName: school.name
+        });
+        break;
+    }
+  });
+  logActivity(`Auto-updated ${school.name} from ${report.year} annual report`);
+}
+
+// ── LOGO ──
   const file=e.target.files[0]; if(!file) return;
   const reader=new FileReader();
   reader.onload=ev=>{tempLogo=ev.target.result;updateLogoPreview();};
@@ -2914,7 +3183,7 @@ function importData(e){
 function clearAllData(){
   if(!confirm('Delete ALL data permanently? This cannot be undone.'))return;
   if(!confirm('Are you absolutely sure?'))return;
-  DB={passwordHash:DB.passwordHash,schools:[],prospects:[],activity:[]};
+  DB={passwordHash:DB.passwordHash,schools:[],prospects:[],activity:[],people:DB.people||[]};
   save();refreshAll();
 }
 
@@ -2951,6 +3220,7 @@ function saveQuickTrip() {
     notes: document.getElementById('qt-notes').value.trim()
   };
   if (!visit.date && !visit.purpose) { alert('Please add at least a date or purpose.'); return; }
+  if (visit.attendees) savePerson(visit.attendees);
   school.visits.push(visit);
   logActivity(`Planned visit to ${school.name}`);
   save();
@@ -2969,12 +3239,10 @@ function openJournalOverlay(schoolId, entryId) {
   document.getElementById('journal-overlay-title').textContent = entryId ? 'Edit Journal Entry' : 'New Journal Entry';
   document.getElementById('journal-overlay-sub').textContent = school ? school.name : '';
 
-  // Populate with whom dropdown from director + faculty
-  const sel = document.getElementById('je-with-whom-select');
-  sel.innerHTML = '<option value="">— Select or type below —</option>';
+  // Populate with whom from director + faculty as saved people
   if (school) {
-    if (school.directorName) sel.innerHTML += `<option>${school.directorName}${school.directorTitle?' ('+school.directorTitle+')':''}</option>`;
-    (school.faculty||[]).forEach(f => { if(f.name) sel.innerHTML += `<option>${f.name}${f.role?' ('+f.role+')':''}</option>`; });
+    if (school.directorName) savePerson(school.directorName);
+    (school.faculty||[]).forEach(f => { if(f.name) savePerson(f.name); });
   }
 
   if (entryId) {
@@ -2996,11 +3264,6 @@ function openJournalOverlay(schoolId, entryId) {
   document.getElementById('journal-overlay').classList.add('open');
 }
 
-function handleWithWhomSelect() {
-  const sel = document.getElementById('je-with-whom-select');
-  if (sel.value) document.getElementById('je-with-whom').value = sel.value;
-}
-
 function closeJournalOverlay() {
   document.getElementById('journal-overlay').classList.remove('open');
   journalSchoolId = null;
@@ -3011,6 +3274,8 @@ function saveJournalEntry() {
   if (!journalSchoolId) return;
   const notes = document.getElementById('je-notes').value.trim();
   if (!notes) { alert('Please add some notes.'); return; }
+  const withWhom = document.getElementById('je-with-whom').value.trim();
+  if (withWhom) savePerson(withWhom);
   const school = DB.schools.find(s=>s.id===journalSchoolId);
   if (!school) return;
   if (!school.journal) school.journal = [];
@@ -3205,6 +3470,266 @@ function printAnnualSummary() {
   const w = window.open('','_blank');
   w.document.write(html);
   w.document.close();
+}
+
+}
+
+// ── NETWORK MAP ──
+let networkSimulation = null;
+let networkZoom = null;
+
+const NODE_COLORS = {
+  school:   '#1a2744',
+  prospect: '#c9a84c',
+  director: '#2d8653',
+  faculty:  '#6b3db5',
+  teacher:  '#c96a1a',
+  donor:    '#b52020',
+  alumni:   '#888',
+};
+
+function buildNetworkData() {
+  const showDonors   = document.getElementById('net-show-donors')?.checked;
+  const showTeachers = document.getElementById('net-show-teachers')?.checked;
+  const showFaculty  = document.getElementById('net-show-faculty')?.checked;
+  const showAlumni   = document.getElementById('net-show-alumni')?.checked;
+  const showProspects= document.getElementById('net-show-prospects')?.checked;
+
+  const nodes = [], links = [];
+  const nodeMap = {};
+
+  function addNode(id, label, type, meta={}) {
+    if (!nodeMap[id]) {
+      const n = { id, label, type, meta };
+      nodes.push(n);
+      nodeMap[id] = n;
+    }
+    return nodeMap[id];
+  }
+  function addLink(source, target, label='') {
+    if (nodeMap[source] && nodeMap[target])
+      links.push({ source, target, label });
+  }
+
+  DB.schools.forEach(s => {
+    addNode('school:'+s.id, s.name, 'school', {
+      sub: [s.country, s.city].filter(Boolean).join(', '),
+      status: s.status, enrollment: s.enrollment, schoolId: s.id
+    });
+    if (s.directorName) {
+      const did = 'dir:'+s.id;
+      addNode(did, s.directorName, 'director', { sub: s.directorTitle||'Director', email: s.directorEmail, schoolName: s.name });
+      addLink('school:'+s.id, did, 'Director');
+    }
+    if (showFaculty) {
+      (s.faculty||[]).forEach((f,i) => {
+        if (!f.name) return;
+        const fid = 'fac:'+s.id+':'+i;
+        addNode(fid, f.name, 'faculty', { sub: f.role||'Faculty', email: f.email, schoolName: s.name });
+        addLink('school:'+s.id, fid, 'Faculty');
+      });
+    }
+    if (showTeachers) {
+      (s.guestTeachers||[]).forEach((g) => {
+        if (!g.name) return;
+        const gid = 'gt:'+g.name.toLowerCase().replace(/\s+/g,'_');
+        addNode(gid, g.name, 'teacher', { sub: g.type||'Guest Teacher', subject: g.subject });
+        addLink('school:'+s.id, gid, g.type||'Guest Teacher');
+      });
+    }
+    if (showDonors) {
+      (s.donors||[]).forEach((d) => {
+        if (!d.name) return;
+        const did2 = 'donor:'+d.name.toLowerCase().replace(/\s+/g,'_');
+        addNode(did2, d.name, 'donor', { sub: d.type||'Donor', giving: d.giving });
+        addLink('school:'+s.id, did2, 'Donor');
+      });
+    }
+    if (showAlumni) {
+      (s.alumni||[]).forEach((a,i) => {
+        if (!a.name) return;
+        const aid = 'alumni:'+s.id+':'+i;
+        addNode(aid, a.name, 'alumni', { sub: a.role||'Alumni', serving: a.serving, location: a.location, gradYear: a.gradYear });
+        addLink('school:'+s.id, aid, 'Alumni '+(a.gradYear||''));
+      });
+    }
+  });
+
+  if (showProspects) {
+    DB.prospects.forEach(p => {
+      addNode('prospect:'+p.id, p.name, 'prospect', {
+        sub: [p.country, p.city].filter(Boolean).join(', '), stage: p.stage, contact: p.contact
+      });
+    });
+  }
+  return { nodes, links };
+}
+
+function renderNetwork() {
+  const svg = d3.select('#network-svg');
+  svg.selectAll('*').remove();
+  const { nodes, links } = buildNetworkData();
+  if (!nodes.length) {
+    svg.append('text').attr('x','50%').attr('y','50%').attr('text-anchor','middle')
+      .attr('fill','#b0a898').attr('font-size',14).text('No data yet. Add schools to see the network.');
+    return;
+  }
+  const el = document.getElementById('network-svg');
+  const W = el.clientWidth || 900;
+  const H = 600;
+  const g = svg.append('g');
+  networkZoom = d3.zoom().scaleExtent([0.15, 4]).on('zoom', e => g.attr('transform', e.transform));
+  svg.call(networkZoom);
+
+  const link = g.append('g').selectAll('line').data(links).join('line')
+    .attr('stroke','#c8c4bc').attr('stroke-width',1.5).attr('stroke-opacity',0.7);
+
+  const radius = d => d.type==='school'?20 : d.type==='prospect'?14 : 9;
+
+  const node = g.append('g').selectAll('g').data(nodes).join('g')
+    .attr('cursor','pointer')
+    .call(d3.drag()
+      .on('start',(e,d)=>{ if(!e.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+      .on('drag', (e,d)=>{ d.fx=e.x; d.fy=e.y; })
+      .on('end',  (e,d)=>{ if(!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }))
+    .on('click',(e,d)=>{ e.stopPropagation(); showNetDetail(d); });
+
+  node.append('circle')
+    .attr('r', radius)
+    .attr('fill', d=>NODE_COLORS[d.type]||'#888')
+    .attr('stroke','#fff').attr('stroke-width',2).attr('fill-opacity',0.92);
+
+  node.append('text')
+    .attr('dy', d=>radius(d)+11)
+    .attr('text-anchor','middle')
+    .attr('font-size', d=>d.type==='school'?12:10)
+    .attr('font-family', d=>d.type==='school'?'Lora,serif':'DM Sans,sans-serif')
+    .attr('font-weight', d=>d.type==='school'?'600':'400')
+    .attr('fill','#1e1b16').attr('pointer-events','none')
+    .text(d=>d.label.length>22?d.label.slice(0,20)+'…':d.label);
+
+  const sim = networkSimulation = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d=>d.id)
+      .distance(d=>{ const t=d.target.type; return t==='director'?80:t==='faculty'?100:t==='alumni'?120:150; })
+      .strength(0.5))
+    .force('charge', d3.forceManyBody().strength(d=>d.type==='school'?-500:-200))
+    .force('center', d3.forceCenter(W/2,H/2))
+    .force('collision', d3.forceCollide().radius(d=>radius(d)+20))
+    .on('tick',()=>{
+      link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y)
+          .attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+      node.attr('transform',d=>`translate(${d.x},${d.y})`);
+    });
+
+  svg.on('click',()=>document.getElementById('net-detail').style.display='none');
+}
+
+function showNetDetail(d) {
+  const panel = document.getElementById('net-detail');
+  document.getElementById('net-detail-title').textContent = d.label;
+  const m = d.meta;
+  let html = `<div style="margin-bottom:8px;"><span style="background:${NODE_COLORS[d.type]||'#888'};color:white;padding:2px 8px;border-radius:99px;font-size:11px;text-transform:capitalize;">${d.type}</span></div>`;
+  if (m.sub)        html += `<div>${m.sub}</div>`;
+  if (m.status)     html += `<div>Status: <strong>${m.status}</strong></div>`;
+  if (m.stage)      html += `<div>Stage: <strong>${m.stage}</strong></div>`;
+  if (m.enrollment) html += `<div>Enrollment: <strong>${m.enrollment}</strong></div>`;
+  if (m.email)      html += `<div style="word-break:break-all;">✉ ${m.email}</div>`;
+  if (m.giving)     html += `<div>Giving: ${m.giving}</div>`;
+  if (m.subject)    html += `<div>Teaches: ${m.subject}</div>`;
+  if (m.serving)    html += `<div>Serving: ${m.serving}</div>`;
+  if (m.location)   html += `<div>📍 ${m.location}</div>`;
+  if (m.gradYear)   html += `<div>Class of ${m.gradYear}</div>`;
+  if (m.schoolName) html += `<div style="margin-top:6px;font-size:12px;color:var(--text-muted);">@ ${m.schoolName}</div>`;
+  if (m.schoolId)   html += `<button class="btn btn-primary btn-sm" style="margin-top:10px;width:100%;" onclick="closeNetAndOpenSchool('${m.schoolId}')">View School</button>`;
+  document.getElementById('net-detail-body').innerHTML = html;
+  panel.style.display = 'block';
+}
+
+function closeNetAndOpenSchool(id) {
+  document.getElementById('net-detail').style.display = 'none';
+  openQuickView(id);
+}
+
+function resetNetworkZoom() {
+  d3.select('#network-svg').transition().duration(500)
+    .call(networkZoom.transform, d3.zoomIdentity);
+}
+
+function renderPeopleList() {
+  const el = document.getElementById('people-list');
+  if (!el) return;
+  const people = DB.people || [];
+  if (!people.length) { el.innerHTML = '<span style="font-size:13px;color:var(--text-muted);font-style:italic;">No names saved yet.</span>'; return; }
+  el.innerHTML = people.map(p => `
+    <span style="display:inline-flex;align-items:center;gap:4px;background:var(--gray-100);border-radius:99px;padding:3px 10px 3px 12px;font-size:13px;">
+      ${esc(p)}
+      <button onclick="acRemove('${esc(p)}',null,null);renderPeopleList()" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:12px;padding:0 2px;" title="Remove">✕</button>
+    </span>`).join('');
+}
+
+function addPersonManually() {
+  const inp = document.getElementById('add-person-input');
+  if (!inp || !inp.value.trim()) return;
+  savePerson(inp.value);
+  inp.value = '';
+  renderPeopleList();
+}
+
+// ── AUTOCOMPLETE / PEOPLE ──
+function savePerson(name) {
+  if (!name || !name.trim()) return;
+  const n = name.trim();
+  if (!DB.people) DB.people = [];
+  // Store each comma-separated name individually
+  n.split(',').map(p=>p.trim()).filter(Boolean).forEach(p => {
+    if (p.length > 1 && !DB.people.includes(p)) {
+      DB.people.push(p);
+      DB.people.sort((a,b)=>a.localeCompare(b));
+    }
+  });
+  save();
+}
+
+function acInput(input, dropId) {
+  const q = input.value.trim().toLowerCase();
+  const drop = document.getElementById(dropId);
+  if (!drop) return;
+  if (!q) { drop.style.display = 'none'; return; }
+
+  // Match against saved people
+  const matches = (DB.people||[]).filter(p => p.toLowerCase().includes(q));
+  const showNew = q.length > 1 && !DB.people.some(p => p.toLowerCase() === q);
+
+  if (!matches.length && !showNew) { drop.style.display = 'none'; return; }
+
+  drop.innerHTML = [
+    ...matches.map(p => `
+      <div class="ac-item" onmousedown="acSelect('${input.id}','${dropId}','${esc(p)}')">
+        <span>${esc(p)}</span>
+        <button class="ac-remove" onmousedown="event.stopPropagation();acRemove('${esc(p)}','${input.id}','${dropId}')" title="Remove from saved names">✕</button>
+      </div>`),
+    showNew ? `<div class="ac-item ac-item-new" onmousedown="acSelect('${input.id}','${dropId}','${esc(q)}',true)">+ Save "${esc(q)}"</div>` : ''
+  ].join('');
+  drop.style.display = 'block';
+}
+
+function acSelect(inputId, dropId, name, saveIt) {
+  const input = document.getElementById(inputId);
+  if (input) input.value = name;
+  acHide(dropId);
+  if (saveIt) savePerson(name);
+}
+
+function acHide(dropId) {
+  const drop = document.getElementById(dropId);
+  if (drop) drop.style.display = 'none';
+}
+
+function acRemove(name, inputId, dropId) {
+  DB.people = (DB.people||[]).filter(p => p !== name);
+  save();
+  const input = document.getElementById(inputId);
+  if (input) acInput(input, dropId);
 }
 
 // ── UTILS ──
