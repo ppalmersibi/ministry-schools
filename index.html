@@ -1534,6 +1534,12 @@ th.sort-desc::after { content: ' ↓'; color: var(--gold); }
 </div>
 
 <script>
+window.onerror = function(msg, src, line, col, err) {
+  const errDiv = document.createElement('div');
+  errDiv.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#8b2020;color:white;padding:12px 20px;border-radius:8px;font-family:sans-serif;font-size:13px;z-index:9999;max-width:90%;text-align:center;';
+  errDiv.textContent = 'JS Error: ' + msg + ' (line ' + line + ')';
+  document.body.appendChild(errDiv);
+};
 // ── STATE ──
 let DB = {
   schools: [],
@@ -3752,12 +3758,20 @@ function esc(s){
 
 // close overlays on bg click
 document.getElementById('quick-trip-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeQuickTripOverlay();});
-document.getElementById('school-form-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeSchoolForm();});
-document.getElementById('prospect-form-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeProspectForm();});
-document.getElementById('journal-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeJournalOverlay();});
-
 // init
-load();
+try {
+  document.getElementById('school-form-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeSchoolForm();});
+  document.getElementById('prospect-form-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeProspectForm();});
+  document.getElementById('journal-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeJournalOverlay();});
+  document.getElementById('quick-trip-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeQuickTripOverlay();});
+  load();
+} catch(e) {
+  console.error('Init error:', e);
+  const errDiv = document.createElement('div');
+  errDiv.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#8b2020;color:white;padding:12px 20px;border-radius:8px;font-family:sans-serif;font-size:14px;z-index:9999;max-width:80%;text-align:center;';
+  errDiv.textContent = 'App error: ' + e.message + ' — please screenshot this and report it.';
+  document.body.appendChild(errDiv);
+}
 </script>
 </body>
 </html>
