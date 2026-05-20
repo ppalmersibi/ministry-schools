@@ -532,8 +532,7 @@ tr:hover td { background: #fdf8f0; }
   <div class="topbar">
     <div class="topbar-brand"><span>✞</span> Ministry Partner Schools</div>
     <div class="topbar-nav">
-      <button class="nav-btn active" onclick="showPage('dashboard')">Dashboard</button>
-      <button class="nav-btn" onclick="showPage('partners')">Partner Schools</button>
+      <button class="nav-btn active" onclick="showPage('partners')">Partner Schools</button>
       <button class="nav-btn" onclick="showPage('prospects')">Prospective</button>
       <button class="nav-btn" onclick="showPage('journal')">Journal</button>
       <button class="nav-btn" onclick="showPage('settings')">Settings</button>
@@ -546,33 +545,12 @@ tr:hover td { background: #fdf8f0; }
   <div class="main">
 
     <!-- DASHBOARD -->
-    <div class="page active" id="page-dashboard">
-      <div class="page-header">
-        <div>
-          <div class="page-title">Dashboard</div>
-          <div class="page-sub" id="dash-date"></div>
-        </div>
-        <button class="btn btn-primary" onclick="showPage('partners'); openSchoolForm()">+ Add Partner School</button>
-      </div>
-      <div class="stats-row" id="dash-stats"></div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-bottom:1.5rem;">
-        <div class="card" style="padding:1.25rem;">
-          <div style="font-size:13px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:1rem;">Recent Activity</div>
-          <div id="dash-recent" style="font-size:14px;color:var(--text-muted);">No recent activity.</div>
-        </div>
-        <div class="card" style="padding:1.25rem;">
-          <div style="font-size:13px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:1rem;">Upcoming Site Visits</div>
-          <div id="dash-visits" style="font-size:14px;color:var(--text-muted);">No upcoming visits scheduled.</div>
-        </div>
-      </div>
-    </div>
-
     <!-- PARTNER SCHOOLS -->
-    <div class="page" id="page-partners">
+    <div class="page active" id="page-partners">
       <div class="page-header">
         <div>
           <div class="page-title">Partner Schools</div>
-          <div class="page-sub">Active & inactive ministry training partnerships</div>
+          <div class="page-sub" id="partners-date"></div>
         </div>
         <button class="btn btn-primary" onclick="openSchoolForm()">+ Add School</button>
       </div>
@@ -589,7 +567,7 @@ tr:hover td { background: #fdf8f0; }
           <option value="">All countries</option>
         </select>
       </div>
-      <div class="card">
+      <div class="card" style="margin-bottom:1.25rem;">
         <div class="table-scroll">
           <table>
             <thead><tr>
@@ -605,6 +583,16 @@ tr:hover td { background: #fdf8f0; }
             </tr></thead>
             <tbody id="partners-tbody"></tbody>
           </table>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.5rem;">
+        <div class="card" style="padding:1.25rem;">
+          <div style="font-size:13px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:1rem;">Upcoming Site Visits</div>
+          <div id="dash-visits" style="font-size:14px;color:var(--text-muted);">No upcoming visits scheduled.</div>
+        </div>
+        <div class="card" style="padding:1.25rem;">
+          <div style="font-size:13px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:1rem;">Recent Activity</div>
+          <div id="dash-recent" style="font-size:14px;color:var(--text-muted);">No recent activity.</div>
         </div>
       </div>
     </div>
@@ -1306,7 +1294,6 @@ function showPage(id) {
   document.querySelectorAll('.nav-btn').forEach(b => {
     if (b.getAttribute('onclick') && b.getAttribute('onclick').includes("'"+id+"'")) b.classList.add('active');
   });
-  if (id==='dashboard') refreshDashboard();
   if (id==='partners') renderPartners();
   if (id==='prospects') renderProspects();
   if (id==='journal') renderJournal();
@@ -1316,52 +1303,7 @@ function showPage(id) {
 function refreshAll() {
   renderPartners();
   renderProspects();
-  refreshDashboard();
   populateCountryFilter();
-}
-
-// ── DASHBOARD ──
-function refreshDashboard() {
-  const d = new Date();
-  document.getElementById('dash-date').textContent = d.toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
-  const active = DB.schools.filter(s=>s.status==='Active').length;
-  const total = DB.schools.length;
-  const prospects = DB.prospects.length;
-  const totalGiving = DB.schools.reduce((sum,s)=>{
-    return sum + (s.financials||[]).reduce((a,f)=>a+(parseFloat(f.amount)||0),0);
-  }, 0);
-  const totalGrads = DB.schools.reduce((sum,s)=>{
-    return sum + (s.gradCohorts||[]).filter(c=>c.year && (parseInt(c.year)>2020 || (parseInt(c.year)===2020))).reduce((a,c)=>a+(parseInt(c.count)||0),0);
-  }, 0);
-  const totalChurches = DB.schools.reduce((sum,s)=>{
-    return sum + (s.churches||[]).filter(c=>c.year && (parseInt(c.year)>2020 || (parseInt(c.year)===2020))).length;
-  }, 0);
-  document.getElementById('dash-stats').innerHTML = `
-    <div class="stat-card"><div class="stat-label">Partner Schools</div><div class="stat-val">${total}</div></div>
-    <div class="stat-card"><div class="stat-label">Active</div><div class="stat-val">${active}</div></div>
-    <div class="stat-card"><div class="stat-label">Prospects</div><div class="stat-val">${prospects}</div></div>
-    <div class="stat-card"><div class="stat-label">Total Giving</div><div class="stat-val gold">$${totalGiving.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</div></div>
-    <div class="stat-card"><div class="stat-label">Graduated (since Aug 2020)</div><div class="stat-val">${totalGrads.toLocaleString()}</div></div>
-    <div class="stat-card"><div class="stat-label">Churches Planted (since Aug 2020)</div><div class="stat-val">${totalChurches}</div></div>
-  `;
-  // Recent activity
-  const acts = (DB.activity||[]).slice(-5).reverse();
-  document.getElementById('dash-recent').innerHTML = acts.length
-    ? acts.map(a=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:13px;"><span style="color:var(--text-muted)">${a.date}</span> — ${a.text}</div>`).join('')
-    : '<div style="font-size:14px;color:var(--text-muted);font-style:italic;">No activity logged yet.</div>';
-  // Upcoming visits
-  const nowLocal = new Date();
-  const todayStr = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth()+1).padStart(2,'0')}`;
-  const upcoming = [];
-  DB.schools.forEach(s => {
-    (s.visits||[]).forEach(v => {
-      if (v.date && v.date >= todayStr) upcoming.push({school: s.name, ...v});
-    });
-  });
-  upcoming.sort((a,b)=>a.date.localeCompare(b.date));
-  document.getElementById('dash-visits').innerHTML = upcoming.slice(0,5).length
-    ? upcoming.slice(0,5).map(v=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:13px;"><strong style="color:var(--navy)">${fmtMonth(v.date)}</strong> — ${v.school}: ${v.purpose||'Site visit'}</div>`).join('')
-    : '<div style="font-size:14px;color:var(--text-muted);font-style:italic;">No upcoming visits scheduled.</div>';
 }
 
 function logActivity(text) {
@@ -1446,12 +1388,40 @@ function renderPartners() {
   const active = DB.schools.filter(s=>s.status==='Active').length;
   const countries = new Set(DB.schools.map(s=>s.country).filter(Boolean)).size;
   const totalEnroll = DB.schools.reduce((a,s)=>a+(parseInt(s.enrollment)||0),0);
+  const prospects = DB.prospects.length;
+  const totalGiving = DB.schools.reduce((sum,s)=>sum+(s.financials||[]).reduce((a,f)=>a+(parseFloat(f.amount)||0),0),0);
+  const totalGrads = DB.schools.reduce((sum,s)=>sum+(s.gradCohorts||[]).filter(c=>parseInt(c.year)>=2020).reduce((a,c)=>a+(parseInt(c.count)||0),0),0);
+  const totalChurches = DB.schools.reduce((sum,s)=>sum+(s.churches||[]).filter(c=>parseInt(c.year)>=2020).length,0);
+  const d = new Date();
+  const dateStr = d.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  const partnersDateEl = document.getElementById('partners-date');
+  if (partnersDateEl) partnersDateEl.textContent = dateStr;
   document.getElementById('partner-stats').innerHTML = `
     <div class="stat-card"><div class="stat-label">Total Schools</div><div class="stat-val">${DB.schools.length}</div></div>
     <div class="stat-card"><div class="stat-label">Active</div><div class="stat-val">${active}</div></div>
+    <div class="stat-card"><div class="stat-label">Prospects</div><div class="stat-val">${prospects}</div></div>
     <div class="stat-card"><div class="stat-label">Countries</div><div class="stat-val">${countries}</div></div>
     <div class="stat-card"><div class="stat-label">Total Enrollment</div><div class="stat-val">${totalEnroll.toLocaleString()}</div></div>
+    <div class="stat-card"><div class="stat-label">Total Giving</div><div class="stat-val gold">$${totalGiving.toLocaleString('en-US',{maximumFractionDigits:0})}</div></div>
+    <div class="stat-card"><div class="stat-label">Graduated (since 2020)</div><div class="stat-val">${totalGrads.toLocaleString()}</div></div>
+    <div class="stat-card"><div class="stat-label">Churches Planted (since 2020)</div><div class="stat-val">${totalChurches}</div></div>
   `;
+  // Upcoming visits panel
+  const nowLocal = new Date();
+  const todayStr2 = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth()+1).padStart(2,'0')}`;
+  const upcoming = [];
+  DB.schools.forEach(s=>{(s.visits||[]).forEach(v=>{if(v.date&&v.date>=todayStr2)upcoming.push({school:s.name,...v});});});
+  upcoming.sort((a,b)=>a.date.localeCompare(b.date));
+  const visitsEl = document.getElementById('dash-visits');
+  if (visitsEl) visitsEl.innerHTML = upcoming.slice(0,5).length
+    ? upcoming.slice(0,5).map(v=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:13px;"><strong style="color:var(--navy)">${fmtMonth(v.date)}</strong> — ${v.school}: ${v.purpose||'Site visit'}</div>`).join('')
+    : '<div style="font-size:14px;color:var(--text-muted);font-style:italic;">No upcoming visits scheduled.</div>';
+  // Recent activity panel
+  const acts = (DB.activity||[]).slice(-5).reverse();
+  const recentEl = document.getElementById('dash-recent');
+  if (recentEl) recentEl.innerHTML = acts.length
+    ? acts.map(a=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:13px;"><span style="color:var(--text-muted)">${a.date}</span> — ${a.text}</div>`).join('')
+    : '<div style="font-size:14px;color:var(--text-muted);font-style:italic;">No activity logged yet.</div>';
 }
 
 function statusBadge(s) {
@@ -1464,7 +1434,7 @@ function deleteSchool(id) {
   const s = DB.schools.find(x=>x.id===id);
   DB.schools = DB.schools.filter(x=>x.id!==id);
   logActivity(`Deleted school: ${s?s.name:'Unknown'}`);
-  save(); renderPartners(); refreshDashboard();
+  save(); renderPartners();
 }
 
 // ── SCHOOL FORM ──
@@ -1604,7 +1574,7 @@ function saveSchool() {
     DB.schools.push({ id: 's'+Date.now(), ...data });
     logActivity(`Added partner school: ${data.name}`);
   }
-  save(); closeSchoolForm(); renderPartners(); populateCountryFilter(); refreshDashboard();
+  save(); closeSchoolForm(); renderPartners(); populateCountryFilter();
 }
 
 // ── SCHOOL DETAIL VIEW (opens edit form) ──
@@ -2346,7 +2316,7 @@ function saveProspect(){
     DB.prospects.push({id:'p'+Date.now(),...data});
     logActivity(`Added prospect: ${data.name}`);
   }
-  save();closeProspectForm();renderProspects();refreshDashboard();
+  save();closeProspectForm();renderProspects();
 }
 
 function renderProspects(){
@@ -2393,7 +2363,7 @@ function deleteProspect(id){
   const p=DB.prospects.find(x=>x.id===id);
   DB.prospects=DB.prospects.filter(x=>x.id!==id);
   logActivity(`Removed prospect: ${p?p.name:'Unknown'}`);
-  save();renderProspects();refreshDashboard();
+  save();renderProspects();
 }
 
 function convertProspect(id){
@@ -2402,7 +2372,7 @@ function convertProspect(id){
   DB.prospects=DB.prospects.filter(x=>x.id!==id);
   DB.schools.push({id:'s'+Date.now(),name:p.name,city:p.city,country:p.country,website:p.website,overseeingChurch:p.overseeingChurch,email:p.email,phone:p.phone,status:'Active',estYear:new Date().getFullYear(),notes:p.notes,faculty:[],visits:[],guestTeachers:[],financials:[],initiatives:[],gradCohorts:[],donors:[],logo:null});
   logActivity(`Converted prospect to partner: ${p.name}`);
-  save();renderProspects();renderPartners();populateCountryFilter();refreshDashboard();
+  save();renderProspects();renderPartners();populateCountryFilter();
   showPage('partners');
 }
 
@@ -2597,7 +2567,6 @@ document.getElementById('journal-overlay').addEventListener('click',e=>{if(e.tar
 
 // init
 load();
-document.getElementById('dash-date') && (document.getElementById('dash-date').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'}));
 </script>
 </body>
 </html>
