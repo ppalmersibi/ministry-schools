@@ -587,7 +587,10 @@ tr:hover td { background: #fdf8f0; }
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.5rem;">
         <div class="card" style="padding:1.25rem;">
-          <div style="font-size:13px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:1rem;">Upcoming Site Visits</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+            <div style="font-size:13px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);">Upcoming Site Visits</div>
+            <button class="btn btn-gold btn-sm" onclick="openQuickTripOverlay()">+ Plan Trip</button>
+          </div>
           <div id="dash-visits" style="font-size:14px;color:var(--text-muted);">No upcoming visits scheduled.</div>
         </div>
         <div class="card" style="padding:1.25rem;">
@@ -762,6 +765,60 @@ tr:hover td { background: #fdf8f0; }
       <div class="form-footer">
         <button class="btn btn-ghost" onclick="closeJournalOverlay()">Cancel</button>
         <button class="btn btn-primary" onclick="saveJournalEntry()">Save Entry</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- QUICK TRIP OVERLAY -->
+<div class="overlay" id="quick-trip-overlay">
+  <div class="drawer" style="max-width:520px;">
+    <div class="drawer-header">
+      <div>
+        <div class="drawer-title">Plan a Trip</div>
+        <div class="drawer-sub">Log a visit and search flights from Lubbock (LBB)</div>
+      </div>
+      <button class="drawer-close" onclick="closeQuickTripOverlay()">✕</button>
+    </div>
+    <div class="drawer-body">
+      <div class="form-section">
+        <div class="form-section-title">Visit Details</div>
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>School</label>
+            <select id="qt-school" onchange="onQTSchoolChange()">
+              <option value="">— Select school —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Visit Date</label>
+            <input type="month" id="qt-date">
+          </div>
+          <div class="form-group">
+            <label>Purpose</label>
+            <input type="text" id="qt-purpose" placeholder="e.g. Annual check-in">
+          </div>
+          <div class="form-group full">
+            <label>Attendees (from our side)</label>
+            <input type="text" id="qt-attendees" placeholder="Who is travelling?">
+          </div>
+          <div class="form-group full">
+            <label>Notes</label>
+            <textarea id="qt-notes" style="min-height:60px;"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Flight Search — Multi-city</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Build your route leg by leg. First leg always departs LBB.</div>
+        <div id="qt-legs-list"></div>
+        <button class="btn btn-ghost btn-sm" style="margin-bottom:12px;" onclick="addFlightLeg()">+ Add leg</button>
+        <button class="btn btn-primary" style="width:100%;" onclick="searchFlights()">🔍 Open in Google Flights</button>
+        <div style="font-size:12px;color:var(--gray-400);margin-top:8px;">Opens Google Flights multi-city search in a new tab with your legs pre-filled.</div>
+      </div>
+      <div class="form-footer">
+        <button class="btn btn-ghost" onclick="closeQuickTripOverlay()">Cancel</button>
+        <button class="btn btn-gold" onclick="saveQuickTrip()">💾 Save Visit</button>
       </div>
     </div>
   </div>
@@ -1410,11 +1467,15 @@ function renderPartners() {
   const nowLocal = new Date();
   const todayStr2 = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth()+1).padStart(2,'0')}`;
   const upcoming = [];
-  DB.schools.forEach(s=>{(s.visits||[]).forEach(v=>{if(v.date&&v.date>=todayStr2)upcoming.push({school:s.name,...v});});});
+  DB.schools.forEach(s=>{(s.visits||[]).forEach(v=>{if(v.date&&v.date>=todayStr2)upcoming.push({school:s.name,schoolId:s.id,...v});});});
   upcoming.sort((a,b)=>a.date.localeCompare(b.date));
   const visitsEl = document.getElementById('dash-visits');
   if (visitsEl) visitsEl.innerHTML = upcoming.slice(0,5).length
-    ? upcoming.slice(0,5).map(v=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:13px;"><strong style="color:var(--navy)">${fmtMonth(v.date)}</strong> — ${v.school}: ${v.purpose||'Site visit'}</div>`).join('')
+    ? upcoming.slice(0,5).map(v=>`
+      <div style="padding:8px 0;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <div style="font-size:13px;"><strong style="color:var(--navy)">${fmtMonth(v.date)}</strong> — ${v.school}${v.purpose?': '+v.purpose:''}</div>
+        <button class="btn btn-ghost btn-sm" onclick="openQuickTripOverlay('${v.schoolId||''}')" style="white-space:nowrap;font-size:12px;">✈️ Flights</button>
+      </div>`).join('')
     : '<div style="font-size:14px;color:var(--text-muted);font-style:italic;">No upcoming visits scheduled.</div>';
   // Recent activity panel
   const acts = (DB.activity||[]).slice(-5).reverse();
@@ -2404,6 +2465,179 @@ function clearAllData(){
   save();refreshAll();
 }
 
+// ── QUICK TRIP ──
+const COUNTRY_AIRPORTS = {
+  'Philippines': 'CRK',
+  'Indonesia': 'SIN',
+  'Thailand': 'BKK',
+  'Cambodia': 'PNH',
+  'Vietnam': 'SGN',
+  'South Korea': 'ICN',
+  'Korea': 'ICN',
+  'India': 'BLR',
+};
+
+let qtLegs = []; // [{from, to, date}]
+
+function openQuickTripOverlay(schoolId) {
+  const sel = document.getElementById('qt-school');
+  sel.innerHTML = '<option value="">— Select school —</option>' +
+    DB.schools.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+
+  document.getElementById('qt-date').value = '';
+  document.getElementById('qt-purpose').value = '';
+  document.getElementById('qt-attendees').value = '';
+  document.getElementById('qt-notes').value = '';
+
+  // Default legs: LBB → ? → LBB
+  qtLegs = [
+    {from:'LBB', to:'', date:''},
+    {from:'', to:'LBB', date:''},
+  ];
+
+  if (schoolId) {
+    sel.value = schoolId;
+    onQTSchoolChange();
+  }
+
+  renderQTLegs();
+  document.getElementById('quick-trip-overlay').classList.add('open');
+}
+
+function closeQuickTripOverlay() {
+  document.getElementById('quick-trip-overlay').classList.remove('open');
+}
+
+function onQTSchoolChange() {
+  const schoolId = document.getElementById('qt-school').value;
+  if (!schoolId) return;
+  const school = DB.schools.find(s=>s.id===schoolId);
+  if (!school) return;
+  const airport = COUNTRY_AIRPORTS[school.country] || '';
+  if (airport && qtLegs.length > 0) {
+    qtLegs[0].to = airport;
+    // Set last leg's from to airport too if it's a return
+    if (qtLegs.length > 1 && !qtLegs[qtLegs.length-1].from) {
+      qtLegs[qtLegs.length-1].from = airport;
+    }
+    renderQTLegs();
+  }
+}
+
+function addFlightLeg() {
+  // Insert before the last leg (which is usually the return to LBB)
+  const insertAt = Math.max(qtLegs.length - 1, 1);
+  const prevTo = qtLegs[insertAt-1]?.to || '';
+  qtLegs.splice(insertAt, 0, {from: prevTo, to:'', date:''});
+  renderQTLegs();
+}
+
+function removeFlightLeg(i) {
+  if (qtLegs.length <= 2) return; // keep at least 2 legs
+  qtLegs.splice(i, 1);
+  renderQTLegs();
+}
+
+function renderQTLegs() {
+  const el = document.getElementById('qt-legs-list');
+  if (!el) return;
+  const airportOptions = Object.entries(COUNTRY_AIRPORTS)
+    .map(([c,code])=>`<option value="${code}">${code} — ${c}</option>`).join('');
+
+  el.innerHTML = qtLegs.map((leg, i) => `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:10px;padding:10px;background:var(--gray-100);border-radius:var(--radius);">
+      <div>
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">From</div>
+        <input type="text" value="${leg.from}" maxlength="4" placeholder="LBB"
+          style="width:100%;padding:7px 9px;border:1px solid var(--gray-200);border-radius:6px;font-size:14px;font-weight:500;text-transform:uppercase;font-family:inherit;"
+          oninput="qtLegs[${i}].from=this.value.toUpperCase();this.value=this.value.toUpperCase()">
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">To</div>
+        <div style="display:flex;gap:4px;">
+          <select style="flex:1;padding:7px 6px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;"
+            onchange="qtLegs[${i}].to=this.value;document.getElementById('qt-to-${i}').value=this.value;">
+            <option value="">— pick —</option>
+            ${airportOptions}
+          </select>
+          <input type="text" id="qt-to-${i}" value="${leg.to}" maxlength="4" placeholder="BKK"
+            style="width:62px;padding:7px 6px;border:1px solid var(--gray-200);border-radius:6px;font-size:14px;font-weight:500;text-transform:uppercase;font-family:inherit;"
+            oninput="qtLegs[${i}].to=this.value.toUpperCase();this.value=this.value.toUpperCase()">
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">Date</div>
+        <input type="date" value="${leg.date}"
+          style="width:100%;padding:7px 9px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;"
+          oninput="qtLegs[${i}].date=this.value">
+      </div>
+      <div style="padding-bottom:2px;">
+        ${qtLegs.length > 2 ? `<button class="btn-icon danger" onclick="removeFlightLeg(${i})" title="Remove leg">🗑</button>` : '<div style="width:28px;"></div>'}
+      </div>
+    </div>
+    ${i < qtLegs.length-1 ? `<div style="text-align:center;font-size:18px;color:var(--gold);margin:-4px 0 6px;">↓</div>` : ''}
+  `).join('');
+}
+
+function searchFlights() {
+  const legs = qtLegs.filter(l=>l.from&&l.to);
+  if (legs.length < 1) { alert('Please fill in at least one leg (From and To).'); return; }
+
+  // Google Flights multi-city URL format
+  // https://www.google.com/travel/flights/search?tfs=...
+  // Simpler: use the query string approach for multi-city
+  if (legs.length === 1) {
+    const l = legs[0];
+    let url = `https://www.google.com/travel/flights?q=Flights+from+${l.from}+to+${l.to}`;
+    if (l.date) url += `+on+${l.date}`;
+    window.open(url, '_blank');
+  } else {
+    // Multi-city: build a Google Flights multi-city URL
+    const params = legs.map((l,i) => {
+      let s = `f${i+1}=${l.from}&t${i+1}=${l.to}`;
+      if (l.date) s += `&d${i+1}=${l.date}`;
+      return s;
+    }).join('&');
+    // Google Flights multi-city deep link
+    const url = `https://www.google.com/travel/flights/search?tfs=CBwQAhoeEgoyMDI1LTAxLTAxagcIARIDTEJCcgcIARIDQktLGh4SCjIwMjUtMDEtMDhqBwgBEgNCQktyBwgBEgNMQkI&curr=USD`;
+    // Fallback: open Google Flights multi-city with instructions
+    const legSummary = legs.map(l=>`${l.from}→${l.to}${l.date?' ('+l.date+')':''}`).join(', ');
+    const searchUrl = `https://www.google.com/travel/flights?q=multi+city+flights+${legs.map(l=>l.from+'+to+'+l.to).join('+and+')}`;
+    window.open(searchUrl, '_blank');
+    // Also show a summary
+    setTimeout(()=>{
+      const el = document.getElementById('qt-legs-list');
+      if (el) {
+        const note = document.createElement('div');
+        note.style.cssText = 'margin-top:8px;padding:8px 12px;background:#e8f0fe;border-radius:6px;font-size:13px;color:#1a3a7a;';
+        note.innerHTML = `<strong>Route:</strong> ${legSummary}<br><span style="font-size:12px;">On Google Flights, select "Multi-city" and enter each leg manually if needed.</span>`;
+        el.appendChild(note);
+      }
+    }, 300);
+  }
+}
+
+function saveQuickTrip() {
+  const schoolId = document.getElementById('qt-school').value;
+  if (!schoolId) { alert('Please select a school.'); return; }
+  const school = DB.schools.find(s=>s.id===schoolId);
+  if (!school) return;
+  if (!school.visits) school.visits = [];
+  const visit = {
+    id: 'v'+Date.now(),
+    date: document.getElementById('qt-date').value,
+    purpose: document.getElementById('qt-purpose').value.trim(),
+    attendees: document.getElementById('qt-attendees').value.trim(),
+    notes: document.getElementById('qt-notes').value.trim()
+  };
+  if (!visit.date && !visit.purpose) { alert('Please add at least a date or purpose.'); return; }
+  school.visits.push(visit);
+  logActivity(`Planned visit to ${school.name}`);
+  save();
+  renderPartners();
+  closeQuickTripOverlay();
+}
+
 // ── JOURNAL ──
 let journalSchoolId = null;
 let journalEditingId = null;
@@ -2561,6 +2795,7 @@ function esc(s){
 }
 
 // close overlays on bg click
+document.getElementById('quick-trip-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeQuickTripOverlay();});
 document.getElementById('school-form-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeSchoolForm();});
 document.getElementById('prospect-form-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeProspectForm();});
 document.getElementById('journal-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeJournalOverlay();});
