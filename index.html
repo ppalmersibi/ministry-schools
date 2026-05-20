@@ -3445,7 +3445,7 @@ function printSchoolCard(id) {
   ${latestReport.prayer?`<h2>Prayer Requests</h2><p>${latestReport.prayer}</p>`:''}` : ''}
   ${s.notes?`<h2>Notes</h2><p>${s.notes}</p>`:''}
   <p style="margin-top:30px;font-size:11px;color:#b0a898;">Generated ${new Date().toLocaleDateString()} · Ministry Partner Schools Database</p>
-  <script>window.print();<\/script></body></html>`;
+  <scr`+'ipt>window.print();</scr'+'ipt></body></html>`;
 
   const w = window.open('','_blank');
   w.document.write(html);
@@ -3483,7 +3483,7 @@ function printAnnualSummary() {
   <h2>School-by-School (${thisYear} Annual Reports)</h2>
   <table><thead><tr><th>School</th><th>Country</th><th>Enrolled</th><th>Graduated</th><th>Churches Planted</th><th>Current Needs</th></tr></thead>
   <tbody>${rows}</tbody></table>
-  <script>window.print();<\/script></body></html>`;
+  <scr`+'ipt>window.print();</scr'+'ipt></body></html>`;
 
   const w = window.open('','_blank');
   w.document.write(html);
