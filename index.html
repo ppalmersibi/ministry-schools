@@ -6,6 +6,8 @@
 <title>Ministry Training Partner Schools</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <style>
 :root {
@@ -624,6 +626,7 @@ th.sort-desc::after { content: ' ↓'; color: var(--gold); }
       <button class="nav-btn" onclick="showPage('prospects')">Prospective</button>
       <button class="nav-btn" onclick="showPage('journal')">Journal</button>
       <button class="nav-btn" onclick="showPage('trips')">Trips</button>
+      <button class="nav-btn" onclick="showPage('map')">Map</button>
       <button class="nav-btn" onclick="showPage('network')">Network</button>
       <button class="nav-btn" onclick="showPage('settings')">Settings</button>
     </div>
@@ -778,6 +781,27 @@ th.sort-desc::after { content: ' ↓'; color: var(--gold); }
         </select>
       </div>
       <div id="journal-list"></div>
+    </div>
+
+    <!-- MAP -->
+    <div class="page" id="page-map">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Geographic Map</div>
+          <div class="page-sub">Schools plotted by location — click a pin for details</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="map-show-prospects" onchange="renderMap()"> Show prospects
+          </label>
+        </div>
+      </div>
+      <div id="school-map" style="height:580px;border-radius:var(--radius-lg);border:1px solid var(--gray-200);overflow:hidden;"></div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--text-muted);">
+        <span>🔵 School (active)</span>
+        <span>⚫ School (inactive/paused)</span>
+        <span>🟡 Prospect</span>
+      </div>
     </div>
 
     <!-- NETWORK -->
@@ -1752,6 +1776,7 @@ function showPage(id) {
   if (id==='prospects') renderProspects();
   if (id==='journal') renderJournal();
   if (id==='trips') renderTrips();
+  if (id==='map') renderMap();
   if (id==='network') renderNetwork();
   if (id==='settings') renderPeopleList();
 }
@@ -1936,6 +1961,7 @@ function renderPartners() {
   const upcoming = [];
   DB.schools.forEach(s=>{(s.visits||[]).forEach(v=>{if(v.date&&v.date>=todayStr2)upcoming.push({school:s.name,schoolId:s.id,region:s.region||'',tripName:v.tripName||'',...v});});});
   upcoming.sort((a,b)=>a.date.localeCompare(b.date));
+  const visitsEl = document.getElementById('dash-visits');
   if (visitsEl) visitsEl.innerHTML = upcoming.length
     ? upcoming.map(v=>{
         const regionStyle = REGION_COLORS[v.region] || '';
@@ -4069,6 +4095,149 @@ function resetNetworkZoom() {
     .call(networkZoom.transform, d3.zoomIdentity);
 }
 
+// ── GEOGRAPHIC MAP ──
+let leafletMap = null;
+let mapMarkers = [];
+
+const COUNTRY_COORDS = {
+  'Philippines':   [12.8797, 121.7740],
+  'Indonesia':     [0.7893,  113.9213],
+  'Thailand':      [15.8700, 100.9925],
+  'Cambodia':      [12.5657, 104.9910],
+  'Vietnam':       [14.0583, 108.2772],
+  'South Korea':   [35.9078, 127.7669],
+  'Korea':         [35.9078, 127.7669],
+  'India':         [20.5937,  78.9629],
+  'Kenya':         [-0.0236,  37.9062],
+  'Nigeria':       [9.0820,   8.6753],
+  'Uganda':        [1.3733,  32.2903],
+  'Myanmar':       [21.9162,  95.9560],
+  'Nepal':         [28.3949,  84.1240],
+  'Sri Lanka':     [7.8731,  80.7718],
+  'Bangladesh':    [23.6850,  90.3563],
+  'Pakistan':      [30.3753,  69.3451],
+  'Ghana':         [7.9465,   1.0232],
+  'Tanzania':      [-6.3690,  34.8888],
+  'Ethiopia':      [9.1450,  40.4897],
+  'Brazil':        [-14.235, -51.9253],
+  'Mexico':        [23.6345, -102.5528],
+  'Colombia':      [4.5709,  -74.2973],
+  'United States': [37.0902, -95.7129],
+  'USA':           [37.0902, -95.7129],
+};
+
+function getCoords(school) {
+  const base = COUNTRY_COORDS[school.country];
+  if (!base) return null;
+  const seed = school.id ? school.id.charCodeAt(school.id.length-1) : 0;
+  const jitter = (seed % 10) * 0.4 - 2;
+  return [base[0] + jitter * 0.3, base[1] + jitter * 0.5];
+}
+
+function buildPopupHTML(school) {
+  const totalGiving = (school.financials||[]).reduce((a,f)=>a+(parseFloat(f.amount)||0),0);
+  const totalGrads = (school.gradCohorts||[]).reduce((a,c)=>a+(parseInt(c.count)||0),0);
+  const totalChurches = (school.churches||[]).length;
+  const regionStyle = REGION_COLORS[school.region||''] || 'background:#f5f5f5;color:#3d3830';
+  const faculty = (school.faculty||[]).filter(f=>f.name);
+  const donors = (school.donors||[]).filter(d=>d.name);
+  const teachers = (school.guestTeachers||[]).filter(g=>g.name);
+  const alumni = (school.alumni||[]).filter(a=>a.name);
+  return `
+    <div style="font-family:'DM Sans',sans-serif;min-width:240px;max-width:300px;">
+      <div style="font-family:'Lora',serif;font-size:15px;font-weight:600;color:#1a2744;margin-bottom:4px;">${esc(school.name)}</div>
+      <div style="font-size:12px;color:#6b6358;margin-bottom:6px;">
+        ${[school.city,school.country].filter(Boolean).join(', ')}
+        ${school.region?`<span style="${regionStyle};padding:1px 6px;border-radius:99px;font-size:11px;margin-left:4px;">${school.region}</span>`:''}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px;">
+        ${school.directorName?`<div style="font-size:12px;"><span style="color:#6b6358;">Director:</span> <strong>${esc(school.directorName)}</strong></div>`:''}
+        ${school.enrollment?`<div style="font-size:12px;"><span style="color:#6b6358;">Enrollment:</span> <strong>${school.enrollment}</strong></div>`:''}
+        ${totalGrads?`<div style="font-size:12px;"><span style="color:#6b6358;">Graduates:</span> <strong>${totalGrads}</strong></div>`:''}
+        ${totalChurches?`<div style="font-size:12px;"><span style="color:#6b6358;">Churches:</span> <strong>${totalChurches}</strong></div>`:''}
+        ${totalGiving?`<div style="font-size:12px;"><span style="color:#6b6358;">Giving:</span> <strong>$${totalGiving.toLocaleString('en-US',{maximumFractionDigits:0})}</strong></div>`:''}
+        ${school.estYear?`<div style="font-size:12px;"><span style="color:#6b6358;">Est.:</span> <strong>${school.estYear}</strong></div>`:''}
+      </div>
+      ${faculty.length?`<div style="font-size:12px;margin-bottom:4px;"><span style="color:#6b3db5;font-weight:500;">👩‍🏫 Faculty (${faculty.length}):</span> ${faculty.map(f=>esc(f.name)).join(', ')}</div>`:''}
+      ${teachers.length?`<div style="font-size:12px;margin-bottom:4px;"><span style="color:#c96a1a;font-weight:500;">✈️ Guest Teachers (${teachers.length}):</span> ${teachers.map(g=>esc(g.name)).join(', ')}</div>`:''}
+      ${donors.length?`<div style="font-size:12px;margin-bottom:4px;"><span style="color:#b52020;font-weight:500;">❤️ Donors (${donors.length}):</span> ${donors.map(d=>esc(d.name)).join(', ')}</div>`:''}
+      ${alumni.length?`<div style="font-size:12px;margin-bottom:4px;"><span style="color:#888;font-weight:500;">🎓 Alumni (${alumni.length}):</span> ${alumni.slice(0,3).map(a=>esc(a.name)).join(', ')}${alumni.length>3?' +more':''}</div>`:''}
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid #f4f2ee;">
+        <button onclick="closeMapAndOpenSchool('${school.id}')"
+          style="background:#1a2744;color:white;border:none;padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;">
+          View Full Record
+        </button>
+      </div>
+    </div>`;
+}
+
+function buildProspectPopupHTML(p) {
+  return `
+    <div style="font-family:'DM Sans',sans-serif;min-width:200px;">
+      <div style="font-family:'Lora',serif;font-size:14px;font-weight:600;color:#1a2744;margin-bottom:4px;">${esc(p.name)}</div>
+      <div style="font-size:12px;color:#6b6358;margin-bottom:6px;">${[p.city,p.country].filter(Boolean).join(', ')}</div>
+      <span style="background:#e8f0fe;color:#1a3a7a;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500;">${p.stage||'Prospect'}</span>
+      ${p.contact?`<div style="font-size:12px;margin-top:6px;">Contact: ${esc(p.contact)}</div>`:''}
+    </div>`;
+}
+
+function renderMap() {
+  const container = document.getElementById('school-map');
+  if (!container) return;
+  if (!leafletMap) {
+    leafletMap = L.map('school-map').setView([15, 95], 4);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
+      maxZoom: 18,
+    }).addTo(leafletMap);
+  } else {
+    mapMarkers.forEach(m => leafletMap.removeLayer(m));
+    mapMarkers = [];
+  }
+  const showProspects = document.getElementById('map-show-prospects')?.checked;
+
+  DB.schools.forEach(school => {
+    const coords = getCoords(school);
+    if (!coords) return;
+    const isActive = school.status === 'Active';
+    const color = isActive ? '#2e6db5' : '#888';
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2.5px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);${school.pinned?'outline:2px solid #c9a84c;outline-offset:2px;':''}"></div>`,
+      iconSize: [14,14], iconAnchor: [7,7], popupAnchor: [0,-10],
+    });
+    const marker = L.marker(coords, {icon}).addTo(leafletMap)
+      .bindPopup(buildPopupHTML(school), {maxWidth:320, minWidth:260});
+    mapMarkers.push(marker);
+  });
+
+  if (showProspects) {
+    DB.prospects.forEach(p => {
+      const base = COUNTRY_COORDS[p.country];
+      if (!base) return;
+      const seed = p.id ? p.id.charCodeAt(p.id.length-1) : 5;
+      const jitter = (seed % 10) * 0.4 - 2;
+      const coords = [base[0]+jitter*0.25, base[1]+jitter*0.4];
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="width:12px;height:12px;border-radius:50%;background:#c9a84c;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>`,
+        iconSize: [12,12], iconAnchor: [6,6], popupAnchor: [0,-8],
+      });
+      mapMarkers.push(L.marker(coords, {icon}).addTo(leafletMap).bindPopup(buildProspectPopupHTML(p), {maxWidth:280}));
+    });
+  }
+
+  if (mapMarkers.length) {
+    leafletMap.fitBounds(L.featureGroup(mapMarkers).getBounds().pad(0.2));
+  }
+  setTimeout(() => leafletMap.invalidateSize(), 100);
+}
+
+function closeMapAndOpenSchool(id) {
+  if (leafletMap) leafletMap.closePopup();
+  openQuickView(id);
+}
+
 function renderPeopleList() {
   const el = document.getElementById('people-list');
   if (!el) return;
@@ -4105,12 +4274,16 @@ function savePerson(name) {
 }
 
 function acInput(input, dropId) {
-  const q = input.value.trim().toLowerCase();
+  const full = input.value;
   const drop = document.getElementById(dropId);
   if (!drop) return;
+
+  // Get the last token after the last comma
+  const parts = full.split(',');
+  const q = parts[parts.length - 1].trim().toLowerCase();
+
   if (!q) { drop.style.display = 'none'; return; }
 
-  // Match against saved people
   const matches = (DB.people||[]).filter(p => p.toLowerCase().includes(q));
   const showNew = q.length > 1 && !DB.people.some(p => p.toLowerCase() === q);
 
@@ -4129,7 +4302,14 @@ function acInput(input, dropId) {
 
 function acSelect(inputId, dropId, name, saveIt) {
   const input = document.getElementById(inputId);
-  if (input) input.value = name;
+  if (!input) return;
+
+  // Replace only the last token, preserving previous names
+  const parts = input.value.split(',');
+  parts[parts.length - 1] = ' ' + name;
+  // Clean up: trim leading space on first entry
+  input.value = parts.map((p,i) => i===0 ? p.trim() : p.trimStart()).join(', ');
+
   acHide(dropId);
   if (saveIt) savePerson(name);
 }
