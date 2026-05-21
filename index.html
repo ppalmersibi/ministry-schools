@@ -6,9 +6,11 @@
 <title>Ministry Training Partner Schools</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script>
+  window.initGoogleMap = function() { window._googleMapsReady = true; if(window._googleMapsCallback) window._googleMapsCallback(); };
+</script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBAkPA6QjOV2liM-iBWbQaUOMOM-kjE6AI&callback=initGoogleMap&libraries=places" async defer></script>
 <style>
 :root {
   --navy: #1a2744;
@@ -4064,6 +4066,11 @@ function buildNetworkData() {
       addNode('prospect:'+p.id, p.name, 'prospect', {
         sub: [p.country, p.city].filter(Boolean).join(', '), stage: p.stage, contact: p.contact
       });
+      // Link to SIBI so they stay in the gravitational field
+      addLink('sibi', 'prospect:'+p.id, 'Prospect');
+      // Also link to any partner school in the same country — creates geographic proximity
+      const nearbySchool = DB.schools.find(s => s.country && s.country === p.country);
+      if (nearbySchool) addLink('school:'+nearbySchool.id, 'prospect:'+p.id, 'Same country');
     });
   }
   return { nodes, links };
@@ -4129,43 +4136,63 @@ function renderNetwork() {
   const hub = nodes.find(n=>n.id==='sibi');
   if (hub) { hub.fx = W/2; hub.fy = H/2; }
 
-  // Region cluster centers — arranged radially around SIBI
-  const regions = [...new Set(DB.schools.map(s=>s.region).filter(Boolean))];
-  const regionCenters = {};
-  regions.forEach((r,i) => {
-    const angle = (i / regions.length) * 2 * Math.PI - Math.PI/2;
-    const dist = 240;
-    regionCenters[r] = { x: W/2 + Math.cos(angle)*dist, y: H/2 + Math.sin(angle)*dist };
+  // Build a map of each non-school node to its parent school node
+  // so we can apply a strong attraction force keeping people near their school
+  const parentMap = {};
+  links.forEach(l => {
+    const sid = typeof l.source === 'object' ? l.source.id : l.source;
+    const tid = typeof l.target === 'object' ? l.target.id : l.target;
+    const sNode = nodes.find(n=>n.id===sid);
+    const tNode = nodes.find(n=>n.id===tid);
+    if (!sNode || !tNode) return;
+    // If source is a school, target is a person node — record the parent
+    if (sNode.type === 'school' && tNode.type !== 'school') {
+      parentMap[tid] = sid;
+    }
   });
 
   const sim = networkSimulation = d3.forceSimulation(nodes)
     .force('link', d3.forceLink(links).id(d=>d.id)
       .distance(d=>{
         const t = typeof d.target === 'object' ? d.target.type : '';
-        if (t==='school') return 160;
-        if (t==='director') return 75;
-        if (t==='faculty') return 90;
-        if (t==='alumni') return 110;
-        return 140;
+        if (t==='school') return 180;
+        if (t==='prospect') return 120;
+        if (t==='director') return 70;
+        if (t==='faculty') return 85;
+        if (t==='alumni') return 100;
+        return 110;
       })
       .strength(d=>{
         const t = typeof d.target === 'object' ? d.target.type : '';
-        return t==='school' ? 0.9 : 0.6;
+        const s = typeof d.source === 'object' ? d.source.type : '';
+        if (t==='school') return 0.7;
+        if (t==='prospect' && s==='school') return 0.5; // softer — let them drift near but not overlap
+        if (t==='prospect') return 0.3;
+        return 0.9;
       }))
-    .force('charge', d3.forceManyBody().strength(d=>d.type==='hub'?0 : d.type==='school'?-300:-150))
-    .force('center', d3.forceCenter(W/2,H/2))
-    .force('collision', d3.forceCollide().radius(d=>radius(d)+16))
-    // Region clustering — pull schools toward their region center
-    .force('region', () => {
+    .force('charge', d3.forceManyBody().strength(d=>
+      d.type==='hub' ? 0 :
+      d.type==='school' ? -500 :
+      -80
+    ))
+    .force('center', d3.forceCenter(W/2, H/2))
+    .force('collision', d3.forceCollide().radius(d=>radius(d)+14))
+    // Strong parent-attraction: pull each person node toward its parent school
+    .force('parent', () => {
       nodes.forEach(d => {
-        if (d.type !== 'school') return;
-        const school = DB.schools.find(s=>s.id===d.meta?.schoolId);
-        const region = school?.region;
-        if (!region || !regionCenters[region]) return;
-        const cx = regionCenters[region].x;
-        const cy = regionCenters[region].y;
-        d.vx += (cx - d.x) * 0.04;
-        d.vy += (cy - d.y) * 0.04;
+        const parentId = parentMap[d.id];
+        if (!parentId) return;
+        const parent = nodes.find(n=>n.id===parentId);
+        if (!parent) return;
+        // Only apply if this node is a single-school person
+        // Multi-school people (guest teachers at multiple schools) get weaker pull
+        const connectionCount = links.filter(l => {
+          const tid = typeof l.target === 'object' ? l.target.id : l.target;
+          return tid === d.id;
+        }).length;
+        const strength = connectionCount > 1 ? 0.05 : 0.18;
+        d.vx += (parent.x - d.x) * strength;
+        d.vy += (parent.y - d.y) * strength;
       });
     })
     .on('tick',()=>{
@@ -4208,62 +4235,157 @@ function resetNetworkZoom() {
     .call(networkZoom.transform, d3.zoomIdentity);
 }
 
-// ── GEOGRAPHIC MAP ──
-let leafletMap = null;
-let mapMarkers = [];
+// ── GEOGRAPHIC MAP (Google Maps) ──
+let gMap = null;
+let gMapMarkers = [];
+let gInfoWindow = null;
+const GMAPS_KEY = 'AIzaSyBAkPA6QjOV2liM-iBWbQaUOMOM-kjE6AI';
 
-const COUNTRY_COORDS = {
-  'Philippines':   [12.8797, 121.7740],
-  'Indonesia':     [0.7893,  113.9213],
-  'Thailand':      [15.8700, 100.9925],
-  'Cambodia':      [12.5657, 104.9910],
-  'Vietnam':       [14.0583, 108.2772],
-  'South Korea':   [35.9078, 127.7669],
-  'Korea':         [35.9078, 127.7669],
-  'India':         [20.5937,  78.9629],
-  'Kenya':         [-0.0236,  37.9062],
-  'Nigeria':       [9.0820,   8.6753],
-  'Uganda':        [1.3733,  32.2903],
-  'Myanmar':       [21.9162,  95.9560],
-  'Nepal':         [28.3949,  84.1240],
-  'Sri Lanka':     [7.8731,  80.7718],
-  'Bangladesh':    [23.6850,  90.3563],
-  'Pakistan':      [30.3753,  69.3451],
-  'Ghana':         [7.9465,   1.0232],
-  'Tanzania':      [-6.3690,  34.8888],
-  'Ethiopia':      [9.1450,  40.4897],
-  'Brazil':        [-14.235, -51.9253],
-  'Mexico':        [23.6345, -102.5528],
-  'Colombia':      [4.5709,  -74.2973],
-  'United States': [37.0902, -95.7129],
-  'USA':           [37.0902, -95.7129],
-};
+function withGoogleMaps(cb) {
+  if (window._googleMapsReady && window.google?.maps) { cb(); return; }
+  window._googleMapsCallback = cb;
+}
 
-function getCoords(school) {
-  // Use stored geocoded coords first
-  if (school.lat && school.lng) return [school.lat, school.lng];
-  // Fall back to country centroid with jitter
-  const base = COUNTRY_COORDS[school.country];
-  if (!base) return null;
-  const seed = school.id ? school.id.charCodeAt(school.id.length-1) : 0;
-  const jitter = (seed % 10) * 0.4 - 2;
-  return [base[0] + jitter * 0.3, base[1] + jitter * 0.5];
+function renderMap() {
+  const container = document.getElementById('school-map');
+  if (!container) return;
+  withGoogleMaps(() => {
+    if (!gMap) {
+      gMap = new google.maps.Map(container, {
+        center: { lat: 15, lng: 100 },
+        zoom: 4,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: true,
+        styles: [
+          { featureType:'poi', elementType:'labels', stylers:[{visibility:'off'}] }
+        ]
+      });
+      gInfoWindow = new google.maps.InfoWindow();
+    }
+    // Clear existing markers
+    gMapMarkers.forEach(m => m.setMap(null));
+    gMapMarkers = [];
+
+    const showProspects = document.getElementById('map-show-prospects')?.checked;
+    const bounds = new google.maps.LatLngBounds();
+    let hasPoints = false;
+
+    DB.schools.forEach(school => {
+      if (!school.lat || !school.lng) return;
+      const isActive = school.status === 'Active';
+      const color = isActive ? '#2e6db5' : '#888888';
+      const marker = new google.maps.Marker({
+        position: { lat: school.lat, lng: school.lng },
+        map: gMap,
+        title: school.name,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 8,
+          fillColor: color,
+          fillOpacity: 0.92,
+          strokeColor: '#ffffff',
+          strokeWeight: 2,
+        }
+      });
+      marker.addListener('click', () => {
+        gInfoWindow.setContent(buildGMapPopupHTML(school));
+        gInfoWindow.open(gMap, marker);
+      });
+      gMapMarkers.push(marker);
+      bounds.extend(marker.position);
+      hasPoints = true;
+    });
+
+    if (showProspects) {
+      DB.prospects.forEach(p => {
+        if (!p.lat || !p.lng) return;
+        const marker = new google.maps.Marker({
+          position: { lat: p.lat, lng: p.lng },
+          map: gMap,
+          title: p.name,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 7,
+            fillColor: '#c9a84c',
+            fillOpacity: 0.92,
+            strokeColor: '#ffffff',
+            strokeWeight: 2,
+          }
+        });
+        marker.addListener('click', () => {
+          gInfoWindow.setContent(buildProspectPopupHTML(p));
+          gInfoWindow.open(gMap, marker);
+        });
+        gMapMarkers.push(marker);
+        bounds.extend(marker.position);
+        hasPoints = true;
+      });
+    }
+
+    if (hasPoints) gMap.fitBounds(bounds);
+  });
+}
+
+function buildGMapPopupHTML(school) {
+  const totalGiving = (school.financials||[]).reduce((a,f)=>a+(parseFloat(f.amount)||0),0);
+  const totalGrads = (school.gradCohorts||[]).reduce((a,c)=>a+(parseInt(c.count)||0),0);
+  const totalChurches = (school.churches||[]).length;
+  const regionStyle = REGION_COLORS[school.region||''] || 'background:#f5f5f5;color:#3d3830';
+  const faculty = (school.faculty||[]).filter(f=>f.name);
+  const donors = (school.donors||[]).filter(d=>d.name);
+  const teachers = (school.guestTeachers||[]).filter(g=>g.name);
+  const alumni = (school.alumni||[]).filter(a=>a.name);
+  return `<div style="font-family:'DM Sans',sans-serif;min-width:240px;max-width:300px;padding:4px;">
+    <div style="font-family:'Lora',serif;font-size:15px;font-weight:600;color:#1a2744;margin-bottom:4px;">${esc(school.name)}</div>
+    <div style="font-size:12px;color:#6b6358;margin-bottom:6px;">
+      ${[school.city,school.country].filter(Boolean).join(', ')}
+      ${school.region?`<span style="${regionStyle};padding:1px 6px;border-radius:99px;font-size:11px;margin-left:4px;">${school.region}</span>`:''}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-bottom:8px;font-size:12px;">
+      ${school.directorName?`<div><span style="color:#6b6358;">Director:</span> <strong>${esc(school.directorName)}</strong></div>`:''}
+      ${school.enrollment?`<div><span style="color:#6b6358;">Enrollment:</span> <strong>${school.enrollment}</strong></div>`:''}
+      ${totalGrads?`<div><span style="color:#6b6358;">Graduates:</span> <strong>${totalGrads}</strong></div>`:''}
+      ${totalChurches?`<div><span style="color:#6b6358;">Churches:</span> <strong>${totalChurches}</strong></div>`:''}
+      ${totalGiving?`<div><span style="color:#6b6358;">Giving:</span> <strong>$${totalGiving.toLocaleString('en-US',{maximumFractionDigits:0})}</strong></div>`:''}
+      ${school.estYear?`<div><span style="color:#6b6358;">Est.:</span> <strong>${school.estYear}</strong></div>`:''}
+    </div>
+    ${faculty.length?`<div style="font-size:12px;margin-bottom:3px;"><span style="color:#6b3db5;font-weight:500;">👩‍🏫 Faculty (${faculty.length}):</span> ${faculty.map(f=>esc(f.name)).join(', ')}</div>`:''}
+    ${teachers.length?`<div style="font-size:12px;margin-bottom:3px;"><span style="color:#c96a1a;font-weight:500;">✈️ Guest Teachers (${teachers.length}):</span> ${teachers.map(g=>esc(g.name)).join(', ')}</div>`:''}
+    ${donors.length?`<div style="font-size:12px;margin-bottom:3px;"><span style="color:#b52020;font-weight:500;">❤️ Donors (${donors.length}):</span> ${donors.map(d=>esc(d.name)).join(', ')}</div>`:''}
+    ${alumni.length?`<div style="font-size:12px;margin-bottom:3px;"><span style="color:#888;font-weight:500;">🎓 Alumni (${alumni.length}):</span> ${alumni.slice(0,3).map(a=>esc(a.name)).join(', ')}${alumni.length>3?' +more':''}</div>`:''}
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid #f4f2ee;">
+      <button onclick="closeMapAndOpenSchool('${school.id}')"
+        style="background:#1a2744;color:white;border:none;padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;">
+        View Full Record
+      </button>
+    </div>
+  </div>`;
+}
+
+function buildProspectPopupHTML(p) {
+  return `<div style="font-family:'DM Sans',sans-serif;min-width:200px;padding:4px;">
+    <div style="font-family:'Lora',serif;font-size:14px;font-weight:600;color:#1a2744;margin-bottom:4px;">${esc(p.name)}</div>
+    <div style="font-size:12px;color:#6b6358;margin-bottom:6px;">${[p.city,p.country].filter(Boolean).join(', ')}</div>
+    <span style="background:#e8f0fe;color:#1a3a7a;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500;">${p.stage||'Prospect'}</span>
+    ${p.contact?`<div style="font-size:12px;margin-top:6px;">Contact: ${esc(p.contact)}</div>`:''}
+  </div>`;
 }
 
 async function geocodeSchool(school) {
   const query = [school.city, school.state, school.country].filter(Boolean).join(', ');
   if (!query) return;
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
-    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${GMAPS_KEY}&language=en`;
+    const res = await fetch(url);
     const data = await res.json();
-    if (data && data[0]) {
+    if (data.results && data.results[0]) {
+      const loc = data.results[0].geometry.location;
       const idx = DB.schools.findIndex(s=>s.id===school.id);
       if (idx >= 0) {
-        DB.schools[idx].lat = parseFloat(data[0].lat);
-        DB.schools[idx].lng = parseFloat(data[0].lon);
+        DB.schools[idx].lat = loc.lat;
+        DB.schools[idx].lng = loc.lng;
         save();
-        // Refresh map if it's open
         if (document.getElementById('page-map').classList.contains('active')) renderMap();
       }
     }
@@ -4278,114 +4400,34 @@ async function geocodeAllSchools() {
     if (!school.lat && (school.city || school.country)) {
       await geocodeSchool(school);
       count++;
-      await new Promise(r => setTimeout(r, 1100)); // Nominatim rate limit: 1 req/sec
+      await new Promise(r => setTimeout(r, 300));
     }
   }
-  if (btn) { btn.textContent = `✓ Geocoded ${count} school(s)`; btn.disabled = false; }
-  if (document.getElementById('page-map').classList.contains('active')) renderMap();
-}
-
-function buildPopupHTML(school) {
-  const totalGiving = (school.financials||[]).reduce((a,f)=>a+(parseFloat(f.amount)||0),0);
-  const totalGrads = (school.gradCohorts||[]).reduce((a,c)=>a+(parseInt(c.count)||0),0);
-  const totalChurches = (school.churches||[]).length;
-  const regionStyle = REGION_COLORS[school.region||''] || 'background:#f5f5f5;color:#3d3830';
-  const faculty = (school.faculty||[]).filter(f=>f.name);
-  const donors = (school.donors||[]).filter(d=>d.name);
-  const teachers = (school.guestTeachers||[]).filter(g=>g.name);
-  const alumni = (school.alumni||[]).filter(a=>a.name);
-  return `
-    <div style="font-family:'DM Sans',sans-serif;min-width:240px;max-width:300px;">
-      <div style="font-family:'Lora',serif;font-size:15px;font-weight:600;color:#1a2744;margin-bottom:4px;">${esc(school.name)}</div>
-      <div style="font-size:12px;color:#6b6358;margin-bottom:6px;">
-        ${[school.city,school.country].filter(Boolean).join(', ')}
-        ${school.region?`<span style="${regionStyle};padding:1px 6px;border-radius:99px;font-size:11px;margin-left:4px;">${school.region}</span>`:''}
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px;">
-        ${school.directorName?`<div style="font-size:12px;"><span style="color:#6b6358;">Director:</span> <strong>${esc(school.directorName)}</strong></div>`:''}
-        ${school.enrollment?`<div style="font-size:12px;"><span style="color:#6b6358;">Enrollment:</span> <strong>${school.enrollment}</strong></div>`:''}
-        ${totalGrads?`<div style="font-size:12px;"><span style="color:#6b6358;">Graduates:</span> <strong>${totalGrads}</strong></div>`:''}
-        ${totalChurches?`<div style="font-size:12px;"><span style="color:#6b6358;">Churches:</span> <strong>${totalChurches}</strong></div>`:''}
-        ${totalGiving?`<div style="font-size:12px;"><span style="color:#6b6358;">Giving:</span> <strong>$${totalGiving.toLocaleString('en-US',{maximumFractionDigits:0})}</strong></div>`:''}
-        ${school.estYear?`<div style="font-size:12px;"><span style="color:#6b6358;">Est.:</span> <strong>${school.estYear}</strong></div>`:''}
-      </div>
-      ${faculty.length?`<div style="font-size:12px;margin-bottom:4px;"><span style="color:#6b3db5;font-weight:500;">👩‍🏫 Faculty (${faculty.length}):</span> ${faculty.map(f=>esc(f.name)).join(', ')}</div>`:''}
-      ${teachers.length?`<div style="font-size:12px;margin-bottom:4px;"><span style="color:#c96a1a;font-weight:500;">✈️ Guest Teachers (${teachers.length}):</span> ${teachers.map(g=>esc(g.name)).join(', ')}</div>`:''}
-      ${donors.length?`<div style="font-size:12px;margin-bottom:4px;"><span style="color:#b52020;font-weight:500;">❤️ Donors (${donors.length}):</span> ${donors.map(d=>esc(d.name)).join(', ')}</div>`:''}
-      ${alumni.length?`<div style="font-size:12px;margin-bottom:4px;"><span style="color:#888;font-weight:500;">🎓 Alumni (${alumni.length}):</span> ${alumni.slice(0,3).map(a=>esc(a.name)).join(', ')}${alumni.length>3?' +more':''}</div>`:''}
-      <div style="margin-top:8px;padding-top:8px;border-top:1px solid #f4f2ee;">
-        <button onclick="closeMapAndOpenSchool('${school.id}')"
-          style="background:#1a2744;color:white;border:none;padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;">
-          View Full Record
-        </button>
-      </div>
-    </div>`;
-}
-
-function buildProspectPopupHTML(p) {
-  return `
-    <div style="font-family:'DM Sans',sans-serif;min-width:200px;">
-      <div style="font-family:'Lora',serif;font-size:14px;font-weight:600;color:#1a2744;margin-bottom:4px;">${esc(p.name)}</div>
-      <div style="font-size:12px;color:#6b6358;margin-bottom:6px;">${[p.city,p.country].filter(Boolean).join(', ')}</div>
-      <span style="background:#e8f0fe;color:#1a3a7a;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500;">${p.stage||'Prospect'}</span>
-      ${p.contact?`<div style="font-size:12px;margin-top:6px;">Contact: ${esc(p.contact)}</div>`:''}
-    </div>`;
-}
-
-function renderMap() {
-  const container = document.getElementById('school-map');
-  if (!container) return;
-  if (!leafletMap) {
-    leafletMap = L.map('school-map').setView([15, 95], 4);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
-      maxZoom: 18,
-    }).addTo(leafletMap);
-  } else {
-    mapMarkers.forEach(m => leafletMap.removeLayer(m));
-    mapMarkers = [];
+  // Also geocode prospects
+  for (const p of DB.prospects) {
+    if (!p.lat && (p.city || p.country)) {
+      const query = [p.city, p.country].filter(Boolean).join(', ');
+      try {
+        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${GMAPS_KEY}&language=en`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.results?.[0]) {
+          const loc = data.results[0].geometry.location;
+          const idx = DB.prospects.findIndex(x=>x.id===p.id);
+          if (idx>=0) { DB.prospects[idx].lat=loc.lat; DB.prospects[idx].lng=loc.lng; }
+          count++;
+        }
+      } catch(e) {}
+      await new Promise(r => setTimeout(r, 300));
+    }
   }
-  const showProspects = document.getElementById('map-show-prospects')?.checked;
-
-  DB.schools.forEach(school => {
-    const coords = getCoords(school);
-    if (!coords) return;
-    const isActive = school.status === 'Active';
-    const color = isActive ? '#2e6db5' : '#888';
-    const icon = L.divIcon({
-      className: '',
-      html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2.5px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);${school.pinned?'outline:2px solid #c9a84c;outline-offset:2px;':''}"></div>`,
-      iconSize: [14,14], iconAnchor: [7,7], popupAnchor: [0,-10],
-    });
-    const marker = L.marker(coords, {icon}).addTo(leafletMap)
-      .bindPopup(buildPopupHTML(school), {maxWidth:320, minWidth:260});
-    mapMarkers.push(marker);
-  });
-
-  if (showProspects) {
-    DB.prospects.forEach(p => {
-      const base = COUNTRY_COORDS[p.country];
-      if (!base) return;
-      const seed = p.id ? p.id.charCodeAt(p.id.length-1) : 5;
-      const jitter = (seed % 10) * 0.4 - 2;
-      const coords = [base[0]+jitter*0.25, base[1]+jitter*0.4];
-      const icon = L.divIcon({
-        className: '',
-        html: `<div style="width:12px;height:12px;border-radius:50%;background:#c9a84c;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>`,
-        iconSize: [12,12], iconAnchor: [6,6], popupAnchor: [0,-8],
-      });
-      mapMarkers.push(L.marker(coords, {icon}).addTo(leafletMap).bindPopup(buildProspectPopupHTML(p), {maxWidth:280}));
-    });
-  }
-
-  if (mapMarkers.length) {
-    leafletMap.fitBounds(L.featureGroup(mapMarkers).getBounds().pad(0.2));
-  }
-  setTimeout(() => leafletMap.invalidateSize(), 100);
+  save();
+  if (btn) { btn.textContent = `✓ ${count} geocoded`; btn.disabled = false; }
+  renderMap();
 }
 
 function closeMapAndOpenSchool(id) {
-  if (leafletMap) leafletMap.closePopup();
+  if (gInfoWindow) gInfoWindow.close();
   openQuickView(id);
 }
 
