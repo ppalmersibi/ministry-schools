@@ -1027,7 +1027,10 @@ th.sort-desc::after { content: ' ↓'; color: var(--gold); }
         <div class="form-section-title">Stops / Schools</div>
         <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">Add each school you'll visit, in order. Each stop gets its own date and purpose.</div>
         <div id="tf-stops-list"></div>
-        <button class="btn btn-ghost btn-sm" onclick="addTripStop()">+ Add Stop</button>
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          <button class="btn btn-ghost btn-sm" onclick="addTripStop('school')">+ School stop</button>
+          <button class="btn btn-ghost btn-sm" onclick="addTripStop('other')">+ Prospecting / country visit</button>
+        </div>
       </div>
       <div class="form-footer">
         <button class="btn btn-ghost" onclick="closeTripForm()">Cancel</button>
@@ -1956,34 +1959,93 @@ function renderPartners() {
     <div class="stat-card"><div class="stat-label">Graduated (since 2020)</div><div class="stat-val">${totalGrads.toLocaleString()}</div></div>
     <div class="stat-card"><div class="stat-label">Churches Planted (since 2020)</div><div class="stat-val">${totalChurches}</div></div>
   `;
-  // Upcoming visits panel
+  // Upcoming visits panel — group by trip, show standalone visits separately
   const nowLocal = new Date();
   const todayStr2 = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth()+1).padStart(2,'0')}`;
-  const upcoming = [];
-  DB.schools.forEach(s=>{(s.visits||[]).forEach(v=>{if(v.date&&v.date>=todayStr2)upcoming.push({school:s.name,schoolId:s.id,region:s.region||'',tripName:v.tripName||'',...v});});});
-  upcoming.sort((a,b)=>a.date.localeCompare(b.date));
+
+  // 1. Collect upcoming trips
+  const upcomingTrips = (DB.trips||[]).filter(t => {
+    const date = t.depart || (t.stops||[]).map(s=>s.date).filter(Boolean).sort()[0] || '';
+    return date >= todayStr2;
+  }).sort((a,b)=>(a.depart||'').localeCompare(b.depart||''));
+
+  // 2. Collect standalone visits (not part of a trip)
+  const standaloneVisits = [];
+  DB.schools.forEach(s=>{
+    (s.visits||[]).forEach(v=>{
+      if (v.date && v.date >= todayStr2 && !v.tripId) {
+        standaloneVisits.push({school:s.name, schoolId:s.id, region:s.region||'', ...v});
+      }
+    });
+  });
+  standaloneVisits.sort((a,b)=>a.date.localeCompare(b.date));
+
   const visitsEl = document.getElementById('dash-visits');
-  if (visitsEl) visitsEl.innerHTML = upcoming.length
-    ? upcoming.map(v=>{
-        const regionStyle = REGION_COLORS[v.region] || '';
-        const regionBadge = v.region && regionStyle
-          ? `<span style="${regionStyle};padding:1px 7px;border-radius:99px;font-size:11px;font-weight:500;white-space:nowrap;">${v.region}</span>`
-          : '';
-        return `
-      <div style="padding:8px 0;border-bottom:1px solid var(--gray-100);">
+  if (!visitsEl) return;
+
+  if (!upcomingTrips.length && !standaloneVisits.length) {
+    visitsEl.innerHTML = '<div style="font-size:14px;color:var(--text-muted);font-style:italic;">No upcoming visits scheduled.</div>';
+  } else {
+    let html = '';
+
+    // Trips (grouped)
+    upcomingTrips.forEach(trip => {
+      const validStops = (trip.stops||[]).filter(s=>s.schoolId);
+      const regions = [...new Set(validStops.map(s=>{
+        const school = DB.schools.find(x=>x.id===s.schoolId);
+        return school?.region||'';
+      }).filter(Boolean))];
+      const regionBadges = regions.map(r=>`<span style="${REGION_COLORS[r]||'background:#f5f5f5;color:#3d3830'};padding:1px 6px;border-radius:99px;font-size:11px;font-weight:500;">${r}</span>`).join(' ');
+
+      html += `<div style="padding:8px 0;border-bottom:1px solid var(--gray-100);">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:600;color:var(--navy);">✈️ ${esc(trip.name)}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:1px;">
+              ${[fmtMonth(trip.depart), fmtMonth(trip.return)].filter(Boolean).join(' → ')}
+              ${trip.travellers ? ' · '+esc(trip.travellers) : ''}
+            </div>
+            <div style="margin-top:4px;font-size:12px;color:var(--text-muted);">
+              ${validStops.map((stop,i)=>{
+                const school = stop.schoolId ? DB.schools.find(x=>x.id===stop.schoolId) : null;
+                const stopName = school ? esc(school.name) : (esc(stop.location||'Country visit'));
+                const stopIcon = school ? '' : '🔍 ';
+                return `<span style="margin-right:6px;">${i+1}. ${stopIcon}${stopName}${stop.date?' <span style=\'color:#b0a898\'>('+fmtMonth(stop.date)+')</span>':''}</span>`;
+              }).join('')}
+            </div>
+            ${regionBadges ? `<div style="margin-top:4px;">${regionBadges}</div>` : ''}
+          </div>
+          <div style="display:flex;gap:4px;flex-shrink:0;">
+            <button class="btn-icon" onclick="showPage('trips')" title="View trip">📋</button>
+            <button class="btn-icon" onclick="openTripForm('${trip.id}')" title="Edit trip">✏️</button>
+            <button class="btn-icon danger" onclick="deleteTrip('${trip.id}');renderPartners()" title="Delete trip">🗑</button>
+          </div>
+        </div>
+      </div>`;
+    });
+
+    // Standalone visits
+    standaloneVisits.forEach(v => {
+      const regionStyle = REGION_COLORS[v.region] || '';
+      const regionBadge = v.region && regionStyle
+        ? `<span style="${regionStyle};padding:1px 7px;border-radius:99px;font-size:11px;font-weight:500;">${v.region}</span>`
+        : '';
+      html += `<div style="padding:8px 0;border-bottom:1px solid var(--gray-100);">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
           <div style="font-size:13px;flex:1;min-width:0;">
-            <strong style="color:var(--navy)">${fmtMonth(v.date)}</strong> — ${v.school}${v.purpose?': '+v.purpose:''}
-            ${v.tripName ? `<span style="font-size:11px;color:var(--gold);margin-left:4px;">✈️ ${esc(v.tripName)}</span>` : ''}
+            <strong style="color:var(--navy)">${fmtMonth(v.date)}</strong> — ${esc(v.school)}${v.purpose?': '+esc(v.purpose):''}
             ${regionBadge ? ' '+regionBadge : ''}
           </div>
           <div style="display:flex;gap:4px;flex-shrink:0;">
-            <button class="btn-icon" onclick="openEditVisitOverlay('${v.schoolId}','${v.id}')" title="Edit visit">✏️</button>
-            <button class="btn-icon danger" onclick="deleteUpcomingVisit('${v.schoolId}','${v.id}')" title="Delete visit">🗑</button>
+            <button class="btn-icon" onclick="openEditVisitOverlay('${v.schoolId}','${v.id}')" title="Edit">✏️</button>
+            <button class="btn-icon danger" onclick="deleteUpcomingVisit('${v.schoolId}','${v.id}')" title="Delete">🗑</button>
           </div>
         </div>
-      </div>`}).join('')
-    : '<div style="font-size:14px;color:var(--text-muted);font-style:italic;">No upcoming visits scheduled.</div>';
+      </div>`;
+    });
+
+    visitsEl.innerHTML = html;
+  }
   // Recent activity panel
   const acts = (DB.activity||[]).slice(-5).reverse();
   const recentEl = document.getElementById('dash-recent');
@@ -2023,8 +2085,8 @@ function closeTripForm() {
   tempStops = [];
 }
 
-function addTripStop() {
-  tempStops.push({ schoolId:'', purpose:'', date:'', notes:'' });
+function addTripStop(type) {
+  tempStops.push({ type: type||'school', schoolId:'', location:'', purpose:'', date:'', notes:'' });
   renderTripStops();
 }
 
@@ -2037,28 +2099,43 @@ function renderTripStops() {
   const el = document.getElementById('tf-stops-list');
   if (!el) return;
   if (!tempStops.length) { el.innerHTML = '<div class="list-empty">No stops added yet.</div>'; return; }
-  const schoolOptions = DB.schools.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
-  el.innerHTML = tempStops.map((stop, i) => `
+  el.innerHTML = tempStops.map((stop, i) => {
+    const isSchool = stop.type !== 'other';
+    const typeColor = isSchool ? 'var(--gold)' : '#2d8653';
+    const typeLabel = isSchool ? `Stop ${i+1} — School` : `Stop ${i+1} — Prospecting / Country Visit`;
+    return `
     <div style="background:var(--gray-100);border-radius:var(--radius);padding:12px;margin-bottom:10px;position:relative;">
-      <div style="font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.05em;color:var(--gold);margin-bottom:8px;">Stop ${i+1}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-        <select style="padding:7px 9px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;grid-column:1/-1;"
-          onchange="tempStops[${i}].schoolId=this.value">
-          <option value="">— Select school —</option>
-          ${DB.schools.map(s=>`<option value="${s.id}"${s.id===stop.schoolId?' selected':''}>${s.name}</option>`).join('')}
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.05em;color:${typeColor};">${typeLabel}</span>
+        <select style="margin-left:auto;padding:3px 7px;border:1px solid var(--gray-200);border-radius:5px;font-size:12px;font-family:inherit;background:white;"
+          onchange="tempStops[${i}].type=this.value;renderTripStops()">
+          <option value="school"${isSchool?' selected':''}>School stop</option>
+          <option value="other"${!isSchool?' selected':''}>Prospecting / country visit</option>
         </select>
-        <input type="month" value="${stop.date||''}" placeholder="Visit date"
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+        ${isSchool ? `
+          <select style="padding:7px 9px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;grid-column:1/-1;"
+            onchange="tempStops[${i}].schoolId=this.value">
+            <option value="">— Select school —</option>
+            ${DB.schools.map(s=>`<option value="${s.id}"${s.id===stop.schoolId?' selected':''}>${s.name}</option>`).join('')}
+          </select>` : `
+          <input type="text" value="${esc(stop.location||'')}" placeholder="City / Country"
+            style="padding:7px 9px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;grid-column:1/-1;"
+            oninput="tempStops[${i}].location=this.value">`
+        }
+        <input type="month" value="${stop.date||''}" placeholder="Date"
           style="padding:7px 9px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;"
           oninput="tempStops[${i}].date=this.value">
         <input type="text" value="${esc(stop.purpose||'')}" placeholder="Purpose"
           style="padding:7px 9px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;"
           oninput="tempStops[${i}].purpose=this.value">
       </div>
-      <textarea placeholder="Stop notes…" style="width:100%;padding:7px 9px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;resize:vertical;min-height:50px;"
+      <textarea placeholder="Notes…" style="width:100%;padding:7px 9px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;resize:vertical;min-height:50px;box-sizing:border-box;"
         oninput="tempStops[${i}].notes=this.value">${esc(stop.notes||'')}</textarea>
-      ${tempStops.length > 1 ? `<button class="btn-icon danger" style="position:absolute;top:8px;right:8px;" onclick="removeTripStop(${i})">🗑</button>` : ''}
-    </div>
-  `).join('');
+      ${tempStops.length > 1 ? `<button class="btn-icon danger" style="position:absolute;top:8px;right:38px;" onclick="removeTripStop(${i})">🗑</button>` : ''}
+    </div>`;
+  }).join('');
 }
 
 function saveTrip() {
@@ -2069,8 +2146,8 @@ function saveTrip() {
   const notes = document.getElementById('tf-notes').value.trim();
 
   if (!name) { alert('Please enter a trip name.'); return; }
-  const validStops = tempStops.filter(s=>s.schoolId);
-  if (!validStops.length) { alert('Please add at least one school stop.'); return; }
+  if (!tempStops.length) { alert('Please add at least one stop.'); return; }
+  const validStops = tempStops.filter(s=>s.schoolId || s.location);
 
   if (travellers) savePerson(travellers);
 
@@ -2095,8 +2172,8 @@ function saveTrip() {
     DB.trips.push(trip);
   }
 
-  // Create visit entries on each school
-  validStops.forEach(stop => {
+  // Create visit entries only on school stops
+  validStops.filter(stop=>stop.schoolId).forEach(stop => {
     const school = DB.schools.find(s=>s.id===stop.schoolId);
     if (!school) return;
     if (!school.visits) school.visits = [];
@@ -2175,14 +2252,16 @@ function renderTrips() {
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;">
         ${validStops.map((stop,i)=>{
-          const school = DB.schools.find(x=>x.id===stop.schoolId);
-          const regionStyle = REGION_COLORS[school?.region||'']||'background:#f5f5f5;color:#3d3830';
+          const school = stop.schoolId ? DB.schools.find(x=>x.id===stop.schoolId) : null;
+          const stopName = school ? school.name : (stop.location || 'Unknown location');
+          const stopIcon = school ? '' : '🔍 ';
+          const regionStyle = school ? (REGION_COLORS[school.region||'']||'background:#f5f5f5;color:#3d3830') : 'background:#e8f5e9;color:#1a5c35';
           return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--gray-100);border-radius:6px;font-size:13px;">
             <span style="color:var(--gold);font-weight:600;min-width:20px;">${i+1}.</span>
-            <span style="font-weight:500;color:var(--navy);">${school?school.name:'Unknown school'}</span>
+            <span style="font-weight:500;color:var(--navy);">${stopIcon}${esc(stopName)}</span>
             ${stop.date?`<span style="color:var(--text-muted);">${fmtMonth(stop.date)}</span>`:''}
             ${stop.purpose?`<span style="color:var(--text-muted);">· ${esc(stop.purpose)}</span>`:''}
-            ${school?.region?`<span style="${regionStyle};padding:1px 6px;border-radius:99px;font-size:11px;margin-left:auto;">${school.region}</span>`:''}
+            ${school?.region?`<span style="${regionStyle};padding:1px 6px;border-radius:99px;font-size:11px;margin-left:auto;">${school.region}</span>`:(!school?`<span style="${regionStyle};padding:1px 6px;border-radius:99px;font-size:11px;margin-left:auto;">Prospecting</span>`:'')}
           </div>`;
         }).join('')}
       </div>
