@@ -1783,7 +1783,7 @@ function showPage(id) {
   if (id==='journal') renderJournal();
   if (id==='trips') renderTrips();
   if (id==='map') renderMap();
-  if (id==='network') renderNetwork();
+  if (id==='network') { if (!networkSimulation) renderNetwork(); else { setTimeout(()=>{ const svg=document.getElementById('network-svg'); if(svg&&svg.clientWidth>0&&!svg.querySelector('g')) renderNetwork(); },50); } }
   if (id==='settings') renderPeopleList();
 }
 
@@ -4103,7 +4103,8 @@ function renderNetwork() {
       .on('start',(e,d)=>{ if(d.type==='hub') return; if(!e.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
       .on('drag', (e,d)=>{ if(d.type==='hub') return; d.fx=e.x; d.fy=e.y; })
       .on('end',  (e,d)=>{ if(d.type==='hub') return; if(!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }))
-    .on('click',(e,d)=>{ e.stopPropagation(); showNetDetail(d); });
+    .on('click',(e,d)=>{ e.stopPropagation(); showNetDetail(d); })
+    .on('mousedown',(e,d)=>{ e.stopPropagation(); }); // prevent svg click from closing detail
 
   // Outer ring for hub
   node.filter(d=>d.type==='hub')
@@ -4199,7 +4200,8 @@ function renderNetwork() {
       link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y)
           .attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
       node.attr('transform',d=>`translate(${d.x},${d.y})`);
-    });
+    })
+    .on('end', ()=>{ sim.stop(); });
 
   svg.on('click',()=>document.getElementById('net-detail').style.display='none');
 }
@@ -4249,12 +4251,18 @@ function withGoogleMaps(cb) {
 function renderMap() {
   const container = document.getElementById('school-map');
   if (!container) return;
+
+  // If map exists but container was hidden on init, it may have zero size — destroy and recreate
+  if (gMap) {
+    google.maps.event.trigger(gMap, 'resize');
+  }
+
   withGoogleMaps(() => {
     if (!gMap) {
       gMap = new google.maps.Map(container, {
         center: { lat: 15, lng: 100 },
         zoom: 4,
-        mapTypeControl: false,
+        mapTypeControl: true,
         streetViewControl: false,
         fullscreenControl: true,
         styles: [
@@ -4263,6 +4271,7 @@ function renderMap() {
       });
       gInfoWindow = new google.maps.InfoWindow();
     }
+
     // Clear existing markers
     gMapMarkers.forEach(m => m.setMap(null));
     gMapMarkers = [];
@@ -4276,16 +4285,16 @@ function renderMap() {
       const isActive = school.status === 'Active';
       const color = isActive ? '#2e6db5' : '#888888';
       const marker = new google.maps.Marker({
-        position: { lat: school.lat, lng: school.lng },
+        position: { lat: parseFloat(school.lat), lng: parseFloat(school.lng) },
         map: gMap,
         title: school.name,
         icon: {
           path: google.maps.SymbolPath.CIRCLE,
-          scale: 8,
+          scale: 9,
           fillColor: color,
           fillOpacity: 0.92,
           strokeColor: '#ffffff',
-          strokeWeight: 2,
+          strokeWeight: 2.5,
         }
       });
       marker.addListener('click', () => {
@@ -4293,7 +4302,7 @@ function renderMap() {
         gInfoWindow.open(gMap, marker);
       });
       gMapMarkers.push(marker);
-      bounds.extend(marker.position);
+      bounds.extend(marker.getPosition());
       hasPoints = true;
     });
 
@@ -4301,7 +4310,7 @@ function renderMap() {
       DB.prospects.forEach(p => {
         if (!p.lat || !p.lng) return;
         const marker = new google.maps.Marker({
-          position: { lat: p.lat, lng: p.lng },
+          position: { lat: parseFloat(p.lat), lng: parseFloat(p.lng) },
           map: gMap,
           title: p.name,
           icon: {
@@ -4318,12 +4327,18 @@ function renderMap() {
           gInfoWindow.open(gMap, marker);
         });
         gMapMarkers.push(marker);
-        bounds.extend(marker.position);
+        bounds.extend(marker.getPosition());
         hasPoints = true;
       });
     }
 
-    if (hasPoints) gMap.fitBounds(bounds);
+    // Fit bounds after a short delay to ensure container is visible and sized
+    setTimeout(() => {
+      google.maps.event.trigger(gMap, 'resize');
+      if (hasPoints) {
+        gMap.fitBounds(bounds);
+      }
+    }, 150);
   });
 }
 
