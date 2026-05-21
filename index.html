@@ -301,10 +301,10 @@ tr:hover td { background: #fdf8f0; }
 .badge-contacted { background: #fff0e0; color: #8b4500; }
 .badge-negotiating { background: #f0e8fe; color: #4a1580; }
 .badge-declined { background: var(--danger-light); color: var(--danger); }
-.badge-gt-teacher { background: #e6f4ea; color: #1e6b3a; }
-.badge-gt-intern { background: #fff3e0; color: #8b4500; }
+.badge-gt-teacher { background: #e3f2fd; color: #0d47a1; }
+.badge-gt-intern  { background: #e0f4f1; color: #0d5c52; }
 .badge-gt-speaker { background: #ede7f6; color: #4a1580; }
-.badge-gt-trainer { background: #e3f2fd; color: #0d47a1; }
+.badge-gt-trainer { background: #e8f5e9; color: #1a5c35; }
 
 /* ── PHOTO AVATAR ── */
 .person-avatar {
@@ -1380,9 +1380,15 @@ th.sort-desc::after { content: ' ↓'; color: var(--gold); }
         </div>
         <div class="mini-form" id="donor-form">
           <div class="mini-form-grid">
-            <div class="ac-wrap"><input type="text" id="df-name" placeholder="Name / Organization" autocomplete="off" oninput="acInput(this,'df-name-drop')" onblur="setTimeout(()=>acHide('df-name-drop'),200)"><div class="ac-dropdown" id="df-name-drop" style="display:none;"></div></div>
+            <div class="ac-wrap"><input type="text" id="df-name" placeholder="Name / Organization" autocomplete="off" oninput="acInput(this,'df-name-drop');checkOverseeingMatch()" onblur="setTimeout(()=>acHide('df-name-drop'),200)"><div class="ac-dropdown" id="df-name-drop" style="display:none;"></div></div>
             <select id="df-type"><option>Individual</option><option>Church</option><option>Organization</option><option>Foundation</option><option>Anonymous</option></select>
             <div class="ac-wrap"><input type="text" id="df-contact" placeholder="Contact person (if org)" autocomplete="off" oninput="acInput(this,'df-contact-drop')" onblur="setTimeout(()=>acHide('df-contact-drop'),200)"><div class="ac-dropdown" id="df-contact-drop" style="display:none;"></div></div>
+            <div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;">
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+                <input type="checkbox" id="df-is-overseeing"> This is the overseeing church
+              </label>
+              <span id="df-overseeing-hint" style="font-size:12px;color:var(--gold);display:none;">⛪ Matches overseeing church field</span>
+            </div>
             <input type="email" id="df-email" placeholder="Email">
             <input type="tel" id="df-phone" placeholder="Phone">
             <input type="text" id="df-giving" placeholder="Giving level / amount (e.g. $500/yr)">
@@ -1692,12 +1698,21 @@ let tempAlumni = [];
 let tempLogo = null;
 
 // ── PERSISTENCE ──
+function toTitleCase(str) {
+  return str.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1));
+}
+
 function save() {
   localStorage.setItem('ministry_db', JSON.stringify(DB));
 }
 function load() {
   const d = localStorage.getItem('ministry_db');
   if (d) DB = JSON.parse(d);
+  // Migrate: title-case any all-lowercase saved names
+  if (DB.people) {
+    DB.people = DB.people.map(p => p === p.toLowerCase() ? toTitleCase(p) : p);
+    DB.people.sort((a,b) => a.localeCompare(b));
+  }
 }
 
 // ── AUTH ──
@@ -1914,7 +1929,7 @@ function renderPartners() {
     return `
     <tr${s.pinned?' style="background:#fffdf5;"':''}>
       <td>
-        <span class="school-name" onclick="openQuickView('${s.id}')">${s.name}</span>
+        <span class="school-name" onclick="openQuickView('${s.id}')">${esc(s.name)}</span>
         ${nameExtra}
       </td>
       <td>${[s.country,s.city].filter(Boolean).join(', ')||'—'}</td>
@@ -2044,7 +2059,7 @@ function renderPartners() {
   const acts = (DB.activity||[]).slice(-5).reverse();
   const recentEl = document.getElementById('dash-recent');
   if (recentEl) recentEl.innerHTML = acts.length
-    ? acts.map(a=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:13px;"><span style="color:var(--text-muted)">${a.date}</span> — ${a.text}</div>`).join('')
+    ? acts.map(a=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:13px;"><span style="color:var(--text-muted)">${a.date}</span> — ${esc(a.text)}</div>`).join('')
     : '<div style="font-size:14px;color:var(--text-muted);font-style:italic;">No activity logged yet.</div>';
 }
 
@@ -2112,7 +2127,7 @@ function renderTripStops() {
           <select style="padding:7px 9px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;grid-column:1/-1;"
             onchange="tempStops[${i}].schoolId=this.value">
             <option value="">— Select school —</option>
-            ${DB.schools.map(s=>`<option value="${s.id}"${s.id===stop.schoolId?' selected':''}>${s.name}</option>`).join('')}
+            ${DB.schools.map(s=>`<option value="${s.id}"${s.id===stop.schoolId?' selected':''}>${esc(s.name)}</option>`).join('')}
           </select>` : `
           <input type="text" value="${esc(stop.location||'')}" placeholder="City / Country"
             style="padding:7px 9px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;grid-column:1/-1;"
@@ -2589,6 +2604,13 @@ function closeMiniForm(id) {
   if (eid) eid.value = '';
   const btn = document.getElementById(MINI_FORM_BTN_IDS[id]);
   if (btn) btn.textContent = MINI_FORM_BTN_LABELS[id] || 'Save';
+  // Reset donor-specific UI
+  if (id === 'donor-form') {
+    const cb = document.getElementById('df-is-overseeing');
+    if (cb) cb.checked = false;
+    const hint = document.getElementById('df-overseeing-hint');
+    if (hint) hint.style.display = 'none';
+  }
 }
 
 function toggleMiniForm(id) {
@@ -2903,7 +2925,7 @@ function renderGradCohortList(){
 // ── DONORS / SUPPORTERS ──
 function addDonor(){
   const id=document.getElementById('df-editing-id').value;
-  const d={id:id||'d'+Date.now(),name:document.getElementById('df-name').value.trim(),type:document.getElementById('df-type').value,contact:document.getElementById('df-contact').value.trim(),email:document.getElementById('df-email').value.trim(),phone:document.getElementById('df-phone').value.trim(),giving:document.getElementById('df-giving').value.trim(),since:document.getElementById('df-since').value,notes:document.getElementById('df-notes').value.trim()};
+  const d={id:id||'d'+Date.now(),name:document.getElementById('df-name').value.trim(),type:document.getElementById('df-type').value,contact:document.getElementById('df-contact').value.trim(),email:document.getElementById('df-email').value.trim(),phone:document.getElementById('df-phone').value.trim(),giving:document.getElementById('df-giving').value.trim(),since:document.getElementById('df-since').value,notes:document.getElementById('df-notes').value.trim(),isOverseeing:document.getElementById('df-is-overseeing')?.checked||false};
   if(!d.name) return;
   if(id){const i=tempDonors.findIndex(x=>x.id===id);tempDonors[i]=d;}
   else tempDonors.push(d);
@@ -2923,10 +2945,28 @@ function editDonor(id){
   document.getElementById('df-giving').value=d.giving||'';
   document.getElementById('df-since').value=d.since||'';
   document.getElementById('df-notes').value=d.notes||'';
+  const overseeingEl=document.getElementById('df-is-overseeing');
+  if(overseeingEl) overseeingEl.checked=!!d.isOverseeing;
   document.getElementById('df-editing-id').value=id;
   document.getElementById('df-save-btn').textContent='Update';
   document.getElementById('donor-form').classList.add('open');
+  checkOverseeingMatch();
 }
+function checkOverseeingMatch() {
+  const nameEl = document.getElementById('df-name');
+  const hint = document.getElementById('df-overseeing-hint');
+  const overseeingEl = document.getElementById('df-is-overseeing');
+  if (!nameEl || !hint) return;
+  const name = nameEl.value.trim().toLowerCase();
+  const overseeingChurch = (document.getElementById('sf-overseeing-church')?.value||'').trim().toLowerCase();
+  if (name && overseeingChurch && name === overseeingChurch) {
+    hint.style.display = 'inline';
+    if (overseeingEl && !overseeingEl.checked) overseeingEl.checked = true;
+  } else {
+    hint.style.display = 'none';
+  }
+}
+
 function removeDonor(id){tempDonors=tempDonors.filter(d=>d.id!==id);renderDonorList();}
 function renderDonorList(){
   const el=document.getElementById('donor-list');if(!el)return;
@@ -2935,7 +2975,8 @@ function renderDonorList(){
   el.innerHTML='<div class="list-card">'+tempDonors.map(d=>`
     <div class="list-item">
       <div class="list-item-main">
-        <div class="list-item-title">${esc(d.name)} <span class="badge badge-${typeColors[d.type]||'prospect'}" style="font-size:11px;">${d.type}</span></div>
+        <div class="list-item-title">${esc(d.name)} <span class="badge badge-${typeColors[d.type]||'prospect'}" style="font-size:11px;">${d.type}</span>${d.isOverseeing?` <span style="background:#fff8e1;color:#8a6000;padding:1px 6px;border-radius:99px;font-size:11px;font-weight:500;">⛪ Overseeing church</span>`:''}
+        </div>
         <div class="list-item-sub">${[d.contact,d.email,d.phone].filter(Boolean).join(' · ')||''}</div>
         ${d.giving?`<div class="list-item-sub">Giving: ${esc(d.giving)}${d.since?' · Since '+fmtMonth(d.since):''}</div>`:(d.since?`<div class="list-item-sub">Since: ${fmtMonth(d.since)}</div>`:'')}
         ${d.notes?`<div class="list-item-sub" style="margin-top:3px;">${esc(d.notes)}</div>`:''}
@@ -3602,7 +3643,7 @@ function renderProspects(){
   const tbody=document.getElementById('prospects-tbody');if(!tbody)return;
   tbody.innerHTML=list.length?list.map(p=>`
     <tr>
-      <td><span class="school-name" onclick="openProspectForm('${p.id}')">${p.name}</span></td>
+      <td><span class="school-name" onclick="openProspectForm('${p.id}')">${esc(p.name)}</span></td>
       <td>${intentBadge(p.intent)}</td>
       <td>${[p.country,p.city].filter(Boolean).join(', ')||'—'}</td>
       <td>${p.contact||'—'}</td>
@@ -3681,7 +3722,7 @@ function clearAllData(){
 function openQuickTripOverlay(schoolId) {
   const sel = document.getElementById('qt-school');
   sel.innerHTML = '<option value="">— Select school —</option>' +
-    DB.schools.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+    DB.schools.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
 
   document.getElementById('qt-date').value = '';
   document.getElementById('qt-purpose').value = '';
@@ -3808,7 +3849,7 @@ function renderJournal() {
   const schoolSel = document.getElementById('j-school');
   if (schoolSel) {
     const cur = schoolSel.value;
-    schoolSel.innerHTML = '<option value="">All schools</option>' + DB.schools.map(s=>`<option value="${s.id}"${s.id===cur?' selected':''}>${s.name}</option>`).join('');
+    schoolSel.innerHTML = '<option value="">All schools</option>' + DB.schools.map(s=>`<option value="${s.id}"${s.id===cur?' selected':''}>${esc(s.name)}</option>`).join('');
   }
 
   // Gather all entries
@@ -4089,7 +4130,7 @@ function renderPeopleDirectory() {
   if (schoolSel) {
     const cur = schoolSel.value;
     schoolSel.innerHTML = '<option value="">All schools</option>' +
-      DB.schools.map(s=>`<option value="${s.id}"${s.id===cur?' selected':''}>${s.name}</option>`).join('');
+      DB.schools.map(s=>`<option value="${s.id}"${s.id===cur?' selected':''}>${esc(s.name)}</option>`).join('');
   }
 
   let people = collectAllPeople();
@@ -4150,7 +4191,7 @@ function renderPeopleDirectory() {
       : `<div class="person-avatar-placeholder" style="width:32px;height:32px;font-size:14px;">👤</div>`;
 
     const schoolBadges = p.schools.map(s =>
-      `<span class="school-name" onclick="openQuickView('${s.id}')" style="display:inline-block;background:var(--gray-100);padding:1px 7px;border-radius:99px;font-size:12px;margin:1px;cursor:pointer;">${s.name}</span>`
+      `<span class="school-name" onclick="openQuickView('${s.id}')" style="display:inline-block;background:var(--gray-100);padding:1px 7px;border-radius:99px;font-size:12px;margin:1px;cursor:pointer;">${esc(s.name)}</span>`
     ).join('');
 
     const multiFlag = p.schools.length > 1
@@ -4429,13 +4470,13 @@ function addPersonManually() {
 // ── AUTOCOMPLETE / PEOPLE ──
 function savePerson(name) {
   if (!name || !name.trim()) return;
-  const n = name.trim();
   if (!DB.people) DB.people = [];
-  // Store each comma-separated name individually
-  n.split(',').map(p=>p.trim()).filter(Boolean).forEach(p => {
-    if (p.length > 1 && !DB.people.includes(p)) {
+  name.split(',').map(p => p.trim()).filter(Boolean).forEach(raw => {
+    // Preserve casing as entered, but title-case if all lowercase
+    const p = raw === raw.toLowerCase() ? toTitleCase(raw) : raw;
+    if (p.length > 1 && !DB.people.some(x => x.toLowerCase() === p.toLowerCase())) {
       DB.people.push(p);
-      DB.people.sort((a,b)=>a.localeCompare(b));
+      DB.people.sort((a,b) => a.localeCompare(b));
     }
   });
   save();
@@ -4446,16 +4487,22 @@ function acInput(input, dropId) {
   const drop = document.getElementById(dropId);
   if (!drop) return;
 
-  // Get the last token after the last comma
+  // Match against the last token after the last comma
   const parts = full.split(',');
-  const q = parts[parts.length - 1].trim().toLowerCase();
+  const q = parts[parts.length - 1].trim();
+  const ql = q.toLowerCase();
 
   if (!q) { drop.style.display = 'none'; return; }
 
-  const matches = (DB.people||[]).filter(p => p.toLowerCase().includes(q));
-  const showNew = q.length > 1 && !DB.people.some(p => p.toLowerCase() === q);
+  // Find matches (case-insensitive), but display with original casing
+  const matches = (DB.people||[]).filter(p => p.toLowerCase().includes(ql));
+  const exactMatch = DB.people.some(p => p.toLowerCase() === ql);
+  const showNew = q.length > 1 && !exactMatch;
 
   if (!matches.length && !showNew) { drop.style.display = 'none'; return; }
+
+  // For "save new" option, show title-cased version
+  const saveLabel = q === q.toLowerCase() ? toTitleCase(q) : q;
 
   drop.innerHTML = [
     ...matches.map(p => `
@@ -4463,7 +4510,7 @@ function acInput(input, dropId) {
         <span>${esc(p)}</span>
         <button class="ac-remove" onmousedown="event.stopPropagation();acRemove('${esc(p)}','${input.id}','${dropId}')" title="Remove from saved names">✕</button>
       </div>`),
-    showNew ? `<div class="ac-item ac-item-new" onmousedown="acSelect('${input.id}','${dropId}','${esc(q)}',true)">+ Save "${esc(q)}"</div>` : ''
+    showNew ? `<div class="ac-item ac-item-new" onmousedown="acSelect('${input.id}','${dropId}','${esc(saveLabel)}',true)">+ Save "${esc(saveLabel)}"</div>` : ''
   ].join('');
   drop.style.display = 'block';
 }
