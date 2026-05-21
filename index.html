@@ -6,7 +6,6 @@
 <title>Ministry Training Partner Schools</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <script>
   window.initGoogleMap = function() { window._googleMapsReady = true; if(window._googleMapsCallback) window._googleMapsCallback(); };
 </script>
@@ -630,7 +629,6 @@ th.sort-desc::after { content: ' ↓'; color: var(--gold); }
       <button class="nav-btn" onclick="showPage('trips')">Trips</button>
       <button class="nav-btn" onclick="showPage('people')">People</button>
       <button class="nav-btn" onclick="showPage('map')">Map</button>
-      <button class="nav-btn" onclick="showPage('network')">Network</button>
       <button class="nav-btn" onclick="showPage('settings')">Settings</button>
     </div>
     <div class="topbar-right">
@@ -839,7 +837,7 @@ th.sort-desc::after { content: ' ↓'; color: var(--gold); }
           <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">
             <input type="checkbox" id="map-show-prospects" onchange="renderMap()"> Show prospects
           </label>
-          <button class="btn btn-gold btn-sm" id="geocode-all-btn" onclick="geocodeAllSchools()">📍 Geocode all schools</button>
+          <button class="btn btn-gold btn-sm" id="geocode-all-btn" onclick="withGoogleMaps(()=>geocodeAllSchools(true))">📍 Re-geocode all schools</button>
         </div>
       </div>
       <div id="school-map" style="height:580px;border-radius:var(--radius-lg);border:1px solid var(--gray-200);overflow:hidden;"></div>
@@ -850,55 +848,6 @@ th.sort-desc::after { content: ' ↓'; color: var(--gold); }
       </div>
     </div>
 
-    <!-- NETWORK -->
-    <div class="page" id="page-network">
-      <div class="page-header">
-        <div>
-          <div class="page-title">Relationship Network</div>
-          <div class="page-sub">Click nodes to explore · Drag to reposition · Scroll to zoom</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">
-            <input type="checkbox" id="net-show-donors" checked onchange="renderNetwork()"> Donors
-          </label>
-          <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">
-            <input type="checkbox" id="net-show-teachers" checked onchange="renderNetwork()"> Guest Teachers
-          </label>
-          <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">
-            <input type="checkbox" id="net-show-faculty" checked onchange="renderNetwork()"> Faculty
-          </label>
-          <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">
-            <input type="checkbox" id="net-show-alumni" checked onchange="renderNetwork()"> Alumni
-          </label>
-          <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">
-            <input type="checkbox" id="net-show-prospects" checked onchange="renderNetwork()"> Prospects
-          </label>
-          <button class="btn btn-ghost btn-sm" onclick="resetNetworkZoom()">Reset view</button>
-        </div>
-      </div>
-      <!-- Legend -->
-      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:1rem;font-size:12px;color:var(--text-muted);">
-        <span>⚫ SIBI (hub)</span>
-        <span>🔵 School</span>
-        <span>🟡 Prospect</span>
-        <span>🟢 Director/Dean</span>
-        <span>🟣 Faculty</span>
-        <span>🟠 Guest Teacher</span>
-        <span>🔴 Donor</span>
-        <span>⚪ Alumni</span>
-      </div>
-      <div style="position:relative;border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--gray-200);background:var(--gray-100);">
-        <svg id="network-svg" style="width:100%;height:600px;display:block;"></svg>
-        <!-- Node detail panel -->
-        <div id="net-detail" style="display:none;position:absolute;top:12px;right:12px;width:240px;background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:14px;font-size:13px;">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
-            <div id="net-detail-title" style="font-weight:600;font-size:14px;color:var(--navy);line-height:1.3;"></div>
-            <button onclick="document.getElementById('net-detail').style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:16px;line-height:1;flex-shrink:0;">✕</button>
-          </div>
-          <div id="net-detail-body" style="color:var(--text-muted);line-height:1.6;"></div>
-        </div>
-      </div>
-    </div>
 
     <!-- SETTINGS -->
     <div class="page" id="page-settings">
@@ -1827,7 +1776,6 @@ function showPage(id) {
   if (id==='trips') renderTrips();
   if (id==='people') renderPeopleDirectory();
   if (id==='map') renderMap();
-  if (id==='network') { if (!networkSimulation) renderNetwork(); else { setTimeout(()=>{ const svg=document.getElementById('network-svg'); if(svg&&svg.clientWidth>0&&!svg.querySelector('g')) renderNetwork(); },50); } }
   if (id==='settings') renderPeopleList();
 }
 
@@ -4238,271 +4186,6 @@ function renderPeopleDirectory() {
   });
 }
 
-// ── NETWORK MAP ──
-let networkSimulation = null;
-let networkZoom = null;
-
-const NODE_COLORS = {
-  hub:      '#1a2744',
-  school:   '#2e6db5',
-  prospect: '#c9a84c',
-  director: '#2d8653',
-  faculty:  '#6b3db5',
-  teacher:  '#c96a1a',
-  donor:    '#b52020',
-  alumni:   '#888',
-};
-
-function buildNetworkData() {
-  const showDonors   = document.getElementById('net-show-donors')?.checked;
-  const showTeachers = document.getElementById('net-show-teachers')?.checked;
-  const showFaculty  = document.getElementById('net-show-faculty')?.checked;
-  const showAlumni   = document.getElementById('net-show-alumni')?.checked;
-  const showProspects= document.getElementById('net-show-prospects')?.checked;
-
-  const nodes = [], links = [];
-  const nodeMap = {};
-
-  function addNode(id, label, type, meta={}) {
-    if (!nodeMap[id]) {
-      const n = { id, label, type, meta };
-      nodes.push(n);
-      nodeMap[id] = n;
-    }
-    return nodeMap[id];
-  }
-  function addLink(source, target, label='') {
-    if (nodeMap[source] && nodeMap[target])
-      links.push({ source, target, label });
-  }
-
-  // SIBI — central hub, fixed at center
-  addNode('sibi', 'SIBI', 'hub', { sub: 'Central Ministry Hub' });
-  nodeMap['sibi'].fx = null; // will be set after sim starts
-  nodeMap['sibi'].fy = null;
-
-  DB.schools.forEach(s => {
-    addNode('school:'+s.id, s.name, 'school', {
-      sub: [s.country, s.city].filter(Boolean).join(', '),
-      status: s.status, enrollment: s.enrollment, schoolId: s.id
-    });
-    // Every school links to SIBI
-    addLink('sibi', 'school:'+s.id, 'Partner');
-    if (s.directorName) {
-      const did = 'dir:'+s.id;
-      addNode(did, s.directorName, 'director', { sub: s.directorTitle||'Director', email: s.directorEmail, schoolName: s.name });
-      addLink('school:'+s.id, did, 'Director');
-    }
-    if (showFaculty) {
-      (s.faculty||[]).forEach((f,i) => {
-        if (!f.name) return;
-        const fid = 'fac:'+s.id+':'+i;
-        addNode(fid, f.name, 'faculty', { sub: f.role||'Faculty', email: f.email, schoolName: s.name });
-        addLink('school:'+s.id, fid, 'Faculty');
-      });
-    }
-    if (showTeachers) {
-      (s.guestTeachers||[]).forEach((g) => {
-        if (!g.name) return;
-        const gid = 'gt:'+g.name.toLowerCase().replace(/\s+/g,'_');
-        addNode(gid, g.name, 'teacher', { sub: g.type||'Guest Teacher', subject: g.subject });
-        addLink('school:'+s.id, gid, g.type||'Guest Teacher');
-      });
-    }
-    if (showDonors) {
-      (s.donors||[]).forEach((d) => {
-        if (!d.name) return;
-        const did2 = 'donor:'+d.name.toLowerCase().replace(/\s+/g,'_');
-        addNode(did2, d.name, 'donor', { sub: d.type||'Donor', giving: d.giving });
-        addLink('school:'+s.id, did2, 'Donor');
-      });
-    }
-    if (showAlumni) {
-      (s.alumni||[]).forEach((a,i) => {
-        if (!a.name) return;
-        const aid = 'alumni:'+s.id+':'+i;
-        addNode(aid, a.name, 'alumni', { sub: a.role||'Alumni', serving: a.serving, location: a.location, gradYear: a.gradYear });
-        addLink('school:'+s.id, aid, 'Alumni '+(a.gradYear||''));
-      });
-    }
-  });
-
-  if (showProspects) {
-    DB.prospects.forEach(p => {
-      addNode('prospect:'+p.id, p.name, 'prospect', {
-        sub: [p.country, p.city].filter(Boolean).join(', '), stage: p.stage, contact: p.contact
-      });
-      // Link to SIBI so they stay in the gravitational field
-      addLink('sibi', 'prospect:'+p.id, 'Prospect');
-      // Also link to any partner school in the same country — creates geographic proximity
-      const nearbySchool = DB.schools.find(s => s.country && s.country === p.country);
-      if (nearbySchool) addLink('school:'+nearbySchool.id, 'prospect:'+p.id, 'Same country');
-    });
-  }
-  return { nodes, links };
-}
-
-function renderNetwork() {
-  const svg = d3.select('#network-svg');
-  svg.selectAll('*').remove();
-  const { nodes, links } = buildNetworkData();
-  if (!nodes.length) {
-    svg.append('text').attr('x','50%').attr('y','50%').attr('text-anchor','middle')
-      .attr('fill','#b0a898').attr('font-size',14).text('No data yet. Add schools to see the network.');
-    return;
-  }
-  const el = document.getElementById('network-svg');
-  const W = el.clientWidth || 900;
-  const H = 600;
-  const g = svg.append('g');
-  networkZoom = d3.zoom().scaleExtent([0.15, 4]).on('zoom', e => g.attr('transform', e.transform));
-  svg.call(networkZoom);
-
-  const link = g.append('g').selectAll('line').data(links).join('line')
-    .attr('stroke','#c8c4bc').attr('stroke-width',1.5).attr('stroke-opacity',0.7);
-
-  const radius = d => d.type==='hub'?28 : d.type==='school'?18 : d.type==='prospect'?14 : 9;
-
-  const node = g.append('g').selectAll('g').data(nodes).join('g')
-    .attr('cursor','pointer')
-    .call(d3.drag()
-      .on('start',(e,d)=>{ if(d.type==='hub') return; if(!e.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
-      .on('drag', (e,d)=>{ if(d.type==='hub') return; d.fx=e.x; d.fy=e.y; })
-      .on('end',  (e,d)=>{ if(d.type==='hub') return; if(!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }))
-    .on('click',(e,d)=>{ e.stopPropagation(); showNetDetail(d); })
-    .on('mousedown',(e,d)=>{ e.stopPropagation(); }); // prevent svg click from closing detail
-
-  // Outer ring for hub
-  node.filter(d=>d.type==='hub')
-    .append('circle')
-    .attr('r', 36)
-    .attr('fill', 'none')
-    .attr('stroke', '#c9a84c')
-    .attr('stroke-width', 2)
-    .attr('stroke-dasharray', '4,3')
-    .attr('opacity', 0.6);
-
-  node.append('circle')
-    .attr('r', radius)
-    .attr('fill', d=>NODE_COLORS[d.type]||'#888')
-    .attr('stroke', d=>d.type==='hub'?'#c9a84c':'#fff')
-    .attr('stroke-width', d=>d.type==='hub'?3:2)
-    .attr('fill-opacity', 0.92);
-
-  node.append('text')
-    .attr('dy', d=>d.type==='hub' ? 5 : radius(d)+11)
-    .attr('text-anchor','middle')
-    .attr('font-size', d=>d.type==='hub'?13 : d.type==='school'?12:10)
-    .attr('font-family', d=>d.type==='hub'||d.type==='school'?'Lora,serif':'DM Sans,sans-serif')
-    .attr('font-weight', d=>d.type==='hub'||d.type==='school'?'600':'400')
-    .attr('fill', d=>d.type==='hub'?'#fff':'#1e1b16')
-    .attr('pointer-events','none')
-    .text(d=>d.label.length>22?d.label.slice(0,20)+'…':d.label);
-
-  // Fix SIBI to center
-  const hub = nodes.find(n=>n.id==='sibi');
-  if (hub) { hub.fx = W/2; hub.fy = H/2; }
-
-  // Build a map of each non-school node to its parent school node
-  // so we can apply a strong attraction force keeping people near their school
-  const parentMap = {};
-  links.forEach(l => {
-    const sid = typeof l.source === 'object' ? l.source.id : l.source;
-    const tid = typeof l.target === 'object' ? l.target.id : l.target;
-    const sNode = nodes.find(n=>n.id===sid);
-    const tNode = nodes.find(n=>n.id===tid);
-    if (!sNode || !tNode) return;
-    // If source is a school, target is a person node — record the parent
-    if (sNode.type === 'school' && tNode.type !== 'school') {
-      parentMap[tid] = sid;
-    }
-  });
-
-  const sim = networkSimulation = d3.forceSimulation(nodes)
-    .force('link', d3.forceLink(links).id(d=>d.id)
-      .distance(d=>{
-        const t = typeof d.target === 'object' ? d.target.type : '';
-        if (t==='school') return 180;
-        if (t==='prospect') return 120;
-        if (t==='director') return 70;
-        if (t==='faculty') return 85;
-        if (t==='alumni') return 100;
-        return 110;
-      })
-      .strength(d=>{
-        const t = typeof d.target === 'object' ? d.target.type : '';
-        const s = typeof d.source === 'object' ? d.source.type : '';
-        if (t==='school') return 0.7;
-        if (t==='prospect' && s==='school') return 0.5; // softer — let them drift near but not overlap
-        if (t==='prospect') return 0.3;
-        return 0.9;
-      }))
-    .force('charge', d3.forceManyBody().strength(d=>
-      d.type==='hub' ? 0 :
-      d.type==='school' ? -500 :
-      -80
-    ))
-    .force('center', d3.forceCenter(W/2, H/2))
-    .force('collision', d3.forceCollide().radius(d=>radius(d)+14))
-    // Strong parent-attraction: pull each person node toward its parent school
-    .force('parent', () => {
-      nodes.forEach(d => {
-        const parentId = parentMap[d.id];
-        if (!parentId) return;
-        const parent = nodes.find(n=>n.id===parentId);
-        if (!parent) return;
-        // Only apply if this node is a single-school person
-        // Multi-school people (guest teachers at multiple schools) get weaker pull
-        const connectionCount = links.filter(l => {
-          const tid = typeof l.target === 'object' ? l.target.id : l.target;
-          return tid === d.id;
-        }).length;
-        const strength = connectionCount > 1 ? 0.05 : 0.18;
-        d.vx += (parent.x - d.x) * strength;
-        d.vy += (parent.y - d.y) * strength;
-      });
-    })
-    .on('tick',()=>{
-      link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y)
-          .attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
-      node.attr('transform',d=>`translate(${d.x},${d.y})`);
-    })
-    .on('end', ()=>{ sim.stop(); });
-
-  svg.on('click',()=>document.getElementById('net-detail').style.display='none');
-}
-
-function showNetDetail(d) {
-  const panel = document.getElementById('net-detail');
-  document.getElementById('net-detail-title').textContent = d.label;
-  const m = d.meta;
-  let html = `<div style="margin-bottom:8px;"><span style="background:${NODE_COLORS[d.type]||'#888'};color:white;padding:2px 8px;border-radius:99px;font-size:11px;text-transform:capitalize;">${d.type}</span></div>`;
-  if (m.sub)        html += `<div>${m.sub}</div>`;
-  if (m.status)     html += `<div>Status: <strong>${m.status}</strong></div>`;
-  if (m.stage)      html += `<div>Stage: <strong>${m.stage}</strong></div>`;
-  if (m.enrollment) html += `<div>Enrollment: <strong>${m.enrollment}</strong></div>`;
-  if (m.email)      html += `<div style="word-break:break-all;">✉ ${m.email}</div>`;
-  if (m.giving)     html += `<div>Giving: ${m.giving}</div>`;
-  if (m.subject)    html += `<div>Teaches: ${m.subject}</div>`;
-  if (m.serving)    html += `<div>Serving: ${m.serving}</div>`;
-  if (m.location)   html += `<div>📍 ${m.location}</div>`;
-  if (m.gradYear)   html += `<div>Class of ${m.gradYear}</div>`;
-  if (m.schoolName) html += `<div style="margin-top:6px;font-size:12px;color:var(--text-muted);">@ ${m.schoolName}</div>`;
-  if (m.schoolId)   html += `<button class="btn btn-primary btn-sm" style="margin-top:10px;width:100%;" onclick="closeNetAndOpenSchool('${m.schoolId}')">View School</button>`;
-  document.getElementById('net-detail-body').innerHTML = html;
-  panel.style.display = 'block';
-}
-
-function closeNetAndOpenSchool(id) {
-  document.getElementById('net-detail').style.display = 'none';
-  openQuickView(id);
-}
-
-function resetNetworkZoom() {
-  d3.select('#network-svg').transition().duration(500)
-    .call(networkZoom.transform, d3.zoomIdentity);
-}
-
 // ── GEOGRAPHIC MAP (Google Maps) ──
 let gMap = null;
 let gMapMarkers = [];
@@ -4655,53 +4338,64 @@ function buildProspectPopupHTML(p) {
 
 async function geocodeSchool(school) {
   const query = [school.city, school.state, school.country].filter(Boolean).join(', ');
-  if (!query) return;
-  try {
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${GMAPS_KEY}&language=en`;
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data.results && data.results[0]) {
-      const loc = data.results[0].geometry.location;
-      const idx = DB.schools.findIndex(s=>s.id===school.id);
-      if (idx >= 0) {
-        DB.schools[idx].lat = loc.lat;
-        DB.schools[idx].lng = loc.lng;
-        save();
-        if (document.getElementById('page-map').classList.contains('active')) renderMap();
+  if (!query) return false;
+  return new Promise(resolve => {
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode({ address: query, language: 'en' }, (results, status) => {
+      if (status === 'OK' && results[0]) {
+        const loc = results[0].geometry.location;
+        const idx = DB.schools.findIndex(s=>s.id===school.id);
+        if (idx >= 0) {
+          DB.schools[idx].lat = loc.lat();
+          DB.schools[idx].lng = loc.lng();
+        }
+        resolve(true);
+      } else {
+        console.warn('Geocode failed:', school.name, status);
+        resolve(false);
       }
-    }
-  } catch(e) { console.warn('Geocode failed for', school.name, e.message); }
+    });
+  });
 }
 
-async function geocodeAllSchools() {
+async function geocodeAllSchools(force) {
   const btn = document.getElementById('geocode-all-btn');
   if (btn) { btn.textContent = 'Geocoding…'; btn.disabled = true; }
+
+  // Clear existing coords if forcing re-geocode
+  if (force) {
+    DB.schools.forEach(s => { s.lat = null; s.lng = null; });
+    DB.prospects.forEach(p => { p.lat = null; p.lng = null; });
+  }
+
   let count = 0;
   for (const school of DB.schools) {
     if (!school.lat && (school.city || school.country)) {
-      await geocodeSchool(school);
-      count++;
-      await new Promise(r => setTimeout(r, 300));
+      const ok = await geocodeSchool(school);
+      if (ok) count++;
+      await new Promise(r => setTimeout(r, 200));
     }
   }
-  // Also geocode prospects
+
+  // Geocode prospects too
   for (const p of DB.prospects) {
     if (!p.lat && (p.city || p.country)) {
       const query = [p.city, p.country].filter(Boolean).join(', ');
-      try {
-        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${GMAPS_KEY}&language=en`;
-        const res = await fetch(url);
-        const data = await res.json();
-        if (data.results?.[0]) {
-          const loc = data.results[0].geometry.location;
-          const idx = DB.prospects.findIndex(x=>x.id===p.id);
-          if (idx>=0) { DB.prospects[idx].lat=loc.lat; DB.prospects[idx].lng=loc.lng; }
-          count++;
-        }
-      } catch(e) {}
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(resolve => {
+        const geocoder = new google.maps.Geocoder();
+        geocoder.geocode({ address: query, language: 'en' }, (results, status) => {
+          if (status === 'OK' && results[0]) {
+            const loc = results[0].geometry.location;
+            const idx = DB.prospects.findIndex(x=>x.id===p.id);
+            if (idx>=0) { DB.prospects[idx].lat=loc.lat(); DB.prospects[idx].lng=loc.lng(); count++; }
+          }
+          resolve();
+        });
+      });
+      await new Promise(r => setTimeout(r, 200));
     }
   }
+
   save();
   if (btn) { btn.textContent = `✓ ${count} geocoded`; btn.disabled = false; }
   renderMap();
