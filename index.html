@@ -623,6 +623,7 @@ th.sort-desc::after { content: ' ↓'; color: var(--gold); }
       <button class="nav-btn active" onclick="showPage('partners')">Partner Schools</button>
       <button class="nav-btn" onclick="showPage('prospects')">Prospective</button>
       <button class="nav-btn" onclick="showPage('journal')">Journal</button>
+      <button class="nav-btn" onclick="showPage('trips')">Trips</button>
       <button class="nav-btn" onclick="showPage('network')">Network</button>
       <button class="nav-btn" onclick="showPage('settings')">Settings</button>
     </div>
@@ -701,6 +702,18 @@ th.sort-desc::after { content: ' ↓'; color: var(--gold); }
           <div id="dash-recent" style="font-size:14px;color:var(--text-muted);">No recent activity.</div>
         </div>
       </div>
+    </div>
+
+    <!-- TRIPS -->
+    <div class="page" id="page-trips">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Trips</div>
+          <div class="page-sub">Plan multi-school visits — each stop auto-creates a visit entry on the school's record</div>
+        </div>
+        <button class="btn btn-primary" onclick="openTripForm()">+ Plan Trip</button>
+      </div>
+      <div id="trips-list"></div>
     </div>
 
     <!-- PROSPECTS -->
@@ -951,6 +964,49 @@ th.sort-desc::after { content: ' ↓'; color: var(--gold); }
       <div class="form-footer">
         <button class="btn btn-ghost" onclick="closeJournalOverlay()">Cancel</button>
         <button class="btn btn-primary" onclick="saveJournalEntry()">Save Entry</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TRIP FORM OVERLAY -->
+<div class="overlay" id="trip-form-overlay">
+  <div class="drawer" style="max-width:620px;">
+    <div class="drawer-header">
+      <div>
+        <div class="drawer-title" id="tf-title">Plan a Trip</div>
+        <div class="drawer-sub">Add stops in order — each will create a visit on that school's record</div>
+      </div>
+      <button class="drawer-close" onclick="closeTripForm()">✕</button>
+    </div>
+    <div class="drawer-body">
+      <div class="form-section">
+        <div class="form-section-title">Trip Details</div>
+        <div class="form-grid">
+          <div class="form-group full"><label>Trip Name</label><input type="text" id="tf-name" placeholder="e.g. Southeast Asia Trip 2026"></div>
+          <div class="form-group"><label>Departure Date</label><input type="month" id="tf-depart"></div>
+          <div class="form-group"><label>Return Date</label><input type="month" id="tf-return"></div>
+          <div class="form-group full">
+            <label>Travellers (from our side)</label>
+            <div class="ac-wrap">
+              <input type="text" id="tf-travellers" placeholder="Who is going?" autocomplete="off"
+                oninput="acInput(this,'tf-travellers-drop')"
+                onblur="setTimeout(()=>acHide('tf-travellers-drop'),200)">
+              <div class="ac-dropdown" id="tf-travellers-drop" style="display:none;"></div>
+            </div>
+          </div>
+          <div class="form-group full"><label>Trip Notes</label><textarea id="tf-notes" style="min-height:60px;" placeholder="General notes about the trip…"></textarea></div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Stops / Schools</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">Add each school you'll visit, in order. Each stop gets its own date and purpose.</div>
+        <div id="tf-stops-list"></div>
+        <button class="btn btn-ghost btn-sm" onclick="addTripStop()">+ Add Stop</button>
+      </div>
+      <div class="form-footer">
+        <button class="btn btn-ghost" onclick="closeTripForm()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveTrip()">✈️ Save Trip & Create Visits</button>
       </div>
     </div>
   </div>
@@ -1590,7 +1646,8 @@ let DB = {
   schools: [],
   prospects: [],
   activity: [],
-  people: []
+  people: [],
+  trips: []
 };
 
 let editingSchoolId = null;
@@ -1694,6 +1751,7 @@ function showPage(id) {
   if (id==='partners') renderPartners();
   if (id==='prospects') renderProspects();
   if (id==='journal') renderJournal();
+  if (id==='trips') renderTrips();
   if (id==='network') renderNetwork();
   if (id==='settings') renderPeopleList();
 }
@@ -1876,7 +1934,7 @@ function renderPartners() {
   const nowLocal = new Date();
   const todayStr2 = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth()+1).padStart(2,'0')}`;
   const upcoming = [];
-  DB.schools.forEach(s=>{(s.visits||[]).forEach(v=>{if(v.date&&v.date>=todayStr2)upcoming.push({school:s.name,schoolId:s.id,region:s.region||'',...v});});});
+  DB.schools.forEach(s=>{(s.visits||[]).forEach(v=>{if(v.date&&v.date>=todayStr2)upcoming.push({school:s.name,schoolId:s.id,region:s.region||'',tripName:v.tripName||'',...v});});});
   upcoming.sort((a,b)=>a.date.localeCompare(b.date));
   if (visitsEl) visitsEl.innerHTML = upcoming.length
     ? upcoming.map(v=>{
@@ -1889,6 +1947,7 @@ function renderPartners() {
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
           <div style="font-size:13px;flex:1;min-width:0;">
             <strong style="color:var(--navy)">${fmtMonth(v.date)}</strong> — ${v.school}${v.purpose?': '+v.purpose:''}
+            ${v.tripName ? `<span style="font-size:11px;color:var(--gold);margin-left:4px;">✈️ ${esc(v.tripName)}</span>` : ''}
             ${regionBadge ? ' '+regionBadge : ''}
           </div>
           <div style="display:flex;gap:4px;flex-shrink:0;">
@@ -1906,6 +1965,206 @@ function renderPartners() {
     : '<div style="font-size:14px;color:var(--text-muted);font-style:italic;">No activity logged yet.</div>';
 }
 
+// ── TRIPS ──
+let editingTripId = null;
+let tempStops = []; // [{schoolId, purpose, date, notes}]
+
+function openTripForm(tripId) {
+  editingTripId = tripId || null;
+  document.getElementById('tf-title').textContent = tripId ? 'Edit Trip' : 'Plan a Trip';
+
+  if (tripId) {
+    const trip = (DB.trips||[]).find(t=>t.id===tripId);
+    if (!trip) return;
+    document.getElementById('tf-name').value = trip.name||'';
+    document.getElementById('tf-depart').value = trip.depart||'';
+    document.getElementById('tf-return').value = trip.return||'';
+    document.getElementById('tf-travellers').value = trip.travellers||'';
+    document.getElementById('tf-notes').value = trip.notes||'';
+    tempStops = JSON.parse(JSON.stringify(trip.stops||[]));
+  } else {
+    ['tf-name','tf-depart','tf-return','tf-travellers','tf-notes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    tempStops = [{ schoolId:'', purpose:'', date:'', notes:'' }];
+  }
+  renderTripStops();
+  document.getElementById('trip-form-overlay').classList.add('open');
+}
+
+function closeTripForm() {
+  document.getElementById('trip-form-overlay').classList.remove('open');
+  editingTripId = null;
+  tempStops = [];
+}
+
+function addTripStop() {
+  tempStops.push({ schoolId:'', purpose:'', date:'', notes:'' });
+  renderTripStops();
+}
+
+function removeTripStop(i) {
+  tempStops.splice(i, 1);
+  renderTripStops();
+}
+
+function renderTripStops() {
+  const el = document.getElementById('tf-stops-list');
+  if (!el) return;
+  if (!tempStops.length) { el.innerHTML = '<div class="list-empty">No stops added yet.</div>'; return; }
+  const schoolOptions = DB.schools.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  el.innerHTML = tempStops.map((stop, i) => `
+    <div style="background:var(--gray-100);border-radius:var(--radius);padding:12px;margin-bottom:10px;position:relative;">
+      <div style="font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.05em;color:var(--gold);margin-bottom:8px;">Stop ${i+1}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+        <select style="padding:7px 9px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;grid-column:1/-1;"
+          onchange="tempStops[${i}].schoolId=this.value">
+          <option value="">— Select school —</option>
+          ${DB.schools.map(s=>`<option value="${s.id}"${s.id===stop.schoolId?' selected':''}>${s.name}</option>`).join('')}
+        </select>
+        <input type="month" value="${stop.date||''}" placeholder="Visit date"
+          style="padding:7px 9px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;"
+          oninput="tempStops[${i}].date=this.value">
+        <input type="text" value="${esc(stop.purpose||'')}" placeholder="Purpose"
+          style="padding:7px 9px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;"
+          oninput="tempStops[${i}].purpose=this.value">
+      </div>
+      <textarea placeholder="Stop notes…" style="width:100%;padding:7px 9px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;resize:vertical;min-height:50px;"
+        oninput="tempStops[${i}].notes=this.value">${esc(stop.notes||'')}</textarea>
+      ${tempStops.length > 1 ? `<button class="btn-icon danger" style="position:absolute;top:8px;right:8px;" onclick="removeTripStop(${i})">🗑</button>` : ''}
+    </div>
+  `).join('');
+}
+
+function saveTrip() {
+  const name = document.getElementById('tf-name').value.trim();
+  const depart = document.getElementById('tf-depart').value;
+  const ret = document.getElementById('tf-return').value;
+  const travellers = document.getElementById('tf-travellers').value.trim();
+  const notes = document.getElementById('tf-notes').value.trim();
+
+  if (!name) { alert('Please enter a trip name.'); return; }
+  const validStops = tempStops.filter(s=>s.schoolId);
+  if (!validStops.length) { alert('Please add at least one school stop.'); return; }
+
+  if (travellers) savePerson(travellers);
+
+  const tripId = editingTripId || 'trip'+Date.now();
+  const trip = { id:tripId, name, depart, return:ret, travellers, notes, stops: JSON.parse(JSON.stringify(tempStops)) };
+
+  if (!DB.trips) DB.trips = [];
+
+  // If editing, remove old visit entries from schools first
+  if (editingTripId) {
+    const oldTrip = DB.trips.find(t=>t.id===editingTripId);
+    if (oldTrip) {
+      (oldTrip.stops||[]).forEach(stop => {
+        const school = DB.schools.find(s=>s.id===stop.schoolId);
+        if (school) school.visits = (school.visits||[]).filter(v=>v.tripId!==editingTripId);
+      });
+    }
+    const idx = DB.trips.findIndex(t=>t.id===editingTripId);
+    if (idx>=0) DB.trips[idx] = trip;
+    else DB.trips.push(trip);
+  } else {
+    DB.trips.push(trip);
+  }
+
+  // Create visit entries on each school
+  validStops.forEach(stop => {
+    const school = DB.schools.find(s=>s.id===stop.schoolId);
+    if (!school) return;
+    if (!school.visits) school.visits = [];
+    school.visits.push({
+      id: 'v'+Date.now()+Math.random(),
+      tripId,
+      tripName: name,
+      date: stop.date || depart || '',
+      purpose: stop.purpose || name,
+      attendees: travellers,
+      notes: stop.notes || '',
+    });
+  });
+
+  logActivity(`${editingTripId?'Updated':'Planned'} trip: ${name} (${validStops.length} stops)`);
+  save();
+  closeTripForm();
+  renderTrips();
+  renderPartners();
+}
+
+function deleteTrip(tripId) {
+  if (!confirm('Delete this trip and remove all linked visit entries from schools?')) return;
+  const trip = (DB.trips||[]).find(t=>t.id===tripId);
+  if (trip) {
+    (trip.stops||[]).forEach(stop => {
+      const school = DB.schools.find(s=>s.id===stop.schoolId);
+      if (school) school.visits = (school.visits||[]).filter(v=>v.tripId!==tripId);
+    });
+  }
+  DB.trips = (DB.trips||[]).filter(t=>t.id!==tripId);
+  logActivity(`Deleted trip: ${trip?.name||'Unknown'}`);
+  save();
+  renderTrips();
+  renderPartners();
+}
+
+function renderTrips() {
+  const el = document.getElementById('trips-list');
+  if (!el) return;
+  const trips = (DB.trips||[]).slice().sort((a,b)=>(a.depart||'').localeCompare(b.depart||''));
+  if (!trips.length) {
+    el.innerHTML = '<div class="card" style="padding:2rem;text-align:center;color:var(--text-muted);font-style:italic;">No trips planned yet. Click "+ Plan Trip" to get started.</div>';
+    return;
+  }
+  const now = new Date();
+  const thisMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  el.innerHTML = trips.map(trip => {
+    const isPast = trip.return && trip.return < thisMonth;
+    const isUpcoming = !isPast;
+    const validStops = (trip.stops||[]).filter(s=>s.schoolId);
+    const stopNames = validStops.map(s=>{
+      const school = DB.schools.find(x=>x.id===s.schoolId);
+      return school ? school.name : '?';
+    });
+    const regionBadges = [...new Set(validStops.map(s=>{
+      const school = DB.schools.find(x=>x.id===s.schoolId);
+      return school?.region||'';
+    }).filter(Boolean))].map(r=>`<span style="${REGION_COLORS[r]||'background:#f5f5f5;color:#3d3830'};padding:1px 7px;border-radius:99px;font-size:11px;font-weight:500;">${r}</span>`).join(' ');
+
+    return `<div class="card" style="padding:1.25rem;margin-bottom:1rem;${isPast?'opacity:0.7':''}">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:10px;">
+        <div>
+          <div style="font-family:'Lora',serif;font-size:17px;font-weight:600;color:var(--navy);">${esc(trip.name)}</div>
+          <div style="font-size:13px;color:var(--text-muted);margin-top:2px;">
+            ${[fmtMonth(trip.depart), fmtMonth(trip.return)].filter(Boolean).join(' → ')}
+            ${trip.travellers ? ' · '+esc(trip.travellers) : ''}
+          </div>
+          <div style="margin-top:6px;">${regionBadges}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <span style="padding:3px 10px;border-radius:99px;font-size:12px;font-weight:500;background:${isUpcoming?'#e8f0fe':'#f4f2ee'};color:${isUpcoming?'#1a3a7a':'#6b6358'};">${isUpcoming?'Upcoming':'Past'}</span>
+          <button class="btn-icon" onclick="openTripForm('${trip.id}')">✏️</button>
+          <button class="btn-icon danger" onclick="deleteTrip('${trip.id}')">🗑</button>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${validStops.map((stop,i)=>{
+          const school = DB.schools.find(x=>x.id===stop.schoolId);
+          const regionStyle = REGION_COLORS[school?.region||'']||'background:#f5f5f5;color:#3d3830';
+          return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--gray-100);border-radius:6px;font-size:13px;">
+            <span style="color:var(--gold);font-weight:600;min-width:20px;">${i+1}.</span>
+            <span style="font-weight:500;color:var(--navy);">${school?school.name:'Unknown school'}</span>
+            ${stop.date?`<span style="color:var(--text-muted);">${fmtMonth(stop.date)}</span>`:''}
+            ${stop.purpose?`<span style="color:var(--text-muted);">· ${esc(stop.purpose)}</span>`:''}
+            ${school?.region?`<span style="${regionStyle};padding:1px 6px;border-radius:99px;font-size:11px;margin-left:auto;">${school.region}</span>`:''}
+          </div>`;
+        }).join('')}
+      </div>
+      ${trip.notes?`<div style="margin-top:10px;font-size:13px;color:var(--text-muted);padding-top:10px;border-top:1px solid var(--gray-100);">${esc(trip.notes)}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+// ── EDIT VISIT ──
 function openEditVisitOverlay(schoolId, visitId) {
   const school = DB.schools.find(s=>s.id===schoolId);
   const visit = (school?.visits||[]).find(v=>v.id===visitId);
@@ -2848,6 +3107,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'n' || e.key === 'N') {
     if (document.getElementById('page-partners').classList.contains('active')) openSchoolForm();
     else if (document.getElementById('page-prospects').classList.contains('active')) openProspectForm();
+    else if (document.getElementById('page-trips').classList.contains('active')) openTripForm();
     else if (document.getElementById('page-journal').classList.contains('active')) {
       const firstSchool = DB.schools[0];
       if (firstSchool) openJournalOverlay(firstSchool.id);
@@ -3302,7 +3562,7 @@ function importData(e){
 function clearAllData(){
   if(!confirm('Delete ALL data permanently? This cannot be undone.'))return;
   if(!confirm('Are you absolutely sure?'))return;
-  DB={passwordHash:DB.passwordHash,schools:[],prospects:[],activity:[],people:DB.people||[]};
+  DB={passwordHash:DB.passwordHash,schools:[],prospects:[],activity:[],people:DB.people||[],trips:[]};
   save();refreshAll();
 }
 
@@ -3899,6 +4159,7 @@ try {
   document.getElementById('school-form-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeSchoolForm();});
   document.getElementById('prospect-form-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeProspectForm();});
   document.getElementById('journal-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeJournalOverlay();});
+  document.getElementById('trip-form-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeTripForm();});
   document.getElementById('edit-visit-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeEditVisitOverlay();});
   document.getElementById('quick-trip-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeQuickTripOverlay();});
   load();
