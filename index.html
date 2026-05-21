@@ -628,6 +628,7 @@ th.sort-desc::after { content: ' ↓'; color: var(--gold); }
       <button class="nav-btn" onclick="showPage('prospects')">Prospective</button>
       <button class="nav-btn" onclick="showPage('journal')">Journal</button>
       <button class="nav-btn" onclick="showPage('trips')">Trips</button>
+      <button class="nav-btn" onclick="showPage('people')">People</button>
       <button class="nav-btn" onclick="showPage('map')">Map</button>
       <button class="nav-btn" onclick="showPage('network')">Network</button>
       <button class="nav-btn" onclick="showPage('settings')">Settings</button>
@@ -783,6 +784,48 @@ th.sort-desc::after { content: ' ↓'; color: var(--gold); }
         </select>
       </div>
       <div id="journal-list"></div>
+    </div>
+
+    <!-- PEOPLE -->
+    <div class="page" id="page-people">
+      <div class="page-header">
+        <div>
+          <div class="page-title">People Directory</div>
+          <div class="page-sub">Everyone connected to your partner schools</div>
+        </div>
+      </div>
+      <div class="toolbar">
+        <input type="text" id="pd-search" placeholder="Search by name, role, school…" oninput="renderPeopleDirectory()">
+        <select id="pd-type" onchange="renderPeopleDirectory()">
+          <option value="">All types</option>
+          <option value="director">Director / Dean</option>
+          <option value="faculty">Faculty</option>
+          <option value="teacher">Guest Teacher / Intern</option>
+          <option value="donor">Donor / Supporter</option>
+          <option value="alumni">Alumni</option>
+        </select>
+        <select id="pd-school" onchange="renderPeopleDirectory()">
+          <option value="">All schools</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);cursor:pointer;white-space:nowrap;">
+          <input type="checkbox" id="pd-multi-only" onchange="renderPeopleDirectory()"> Multi-school only
+        </label>
+      </div>
+      <div id="pd-stats" style="margin-bottom:1rem;"></div>
+      <div class="card">
+        <div class="table-scroll">
+          <table>
+            <thead><tr>
+              <th class="sortable" onclick="setPeopleSort('name')">Name</th>
+              <th class="sortable" onclick="setPeopleSort('type')">Type</th>
+              <th class="sortable" onclick="setPeopleSort('school')">School(s)</th>
+              <th>Details</th>
+              <th>Contact</th>
+            </tr></thead>
+            <tbody id="pd-tbody"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <!-- MAP -->
@@ -1782,6 +1825,7 @@ function showPage(id) {
   if (id==='prospects') renderProspects();
   if (id==='journal') renderJournal();
   if (id==='trips') renderTrips();
+  if (id==='people') renderPeopleDirectory();
   if (id==='map') renderMap();
   if (id==='network') { if (!networkSimulation) renderNetwork(); else { setTimeout(()=>{ const svg=document.getElementById('network-svg'); if(svg&&svg.clientWidth>0&&!svg.querySelector('g')) renderNetwork(); },50); } }
   if (id==='settings') renderPeopleList();
@@ -3970,6 +4014,228 @@ function printAnnualSummary() {
   const w = window.open('','_blank');
   w.document.write(html);
   w.document.close();
+}
+
+// ── PEOPLE DIRECTORY ──
+let peopleSortCol = 'name';
+let peopleSortDir = 'asc';
+
+function setPeopleSort(col) {
+  if (peopleSortCol === col) peopleSortDir = peopleSortDir === 'asc' ? 'desc' : 'asc';
+  else { peopleSortCol = col; peopleSortDir = 'asc'; }
+  renderPeopleDirectory();
+}
+
+function collectAllPeople() {
+  const people = [];
+
+  DB.schools.forEach(school => {
+    // Director
+    if (school.directorName) {
+      people.push({
+        id: 'dir:'+school.id,
+        name: school.directorName,
+        type: 'director',
+        typeLabel: school.directorTitle || 'Director / Dean',
+        schools: [{ id: school.id, name: school.name }],
+        email: school.directorEmail || '',
+        phone: school.directorPhone || '',
+        detail: school.directorBio || '',
+        photo: school.directorPhoto || null,
+      });
+    }
+
+    // Faculty
+    (school.faculty||[]).forEach((f,i) => {
+      if (!f.name) return;
+      // Check if this person already exists (same name across schools)
+      const existing = people.find(p => p.type === 'faculty' && p.name.toLowerCase() === f.name.toLowerCase());
+      if (existing) {
+        existing.schools.push({ id: school.id, name: school.name });
+      } else {
+        people.push({
+          id: 'fac:'+school.id+':'+i,
+          name: f.name,
+          type: 'faculty',
+          typeLabel: f.role || 'Faculty',
+          schools: [{ id: school.id, name: school.name }],
+          email: f.email || '',
+          phone: f.phone || '',
+          detail: f.role || '',
+          photo: f.photo || null,
+        });
+      }
+    });
+
+    // Guest Teachers / Interns
+    (school.guestTeachers||[]).forEach((g,i) => {
+      if (!g.name) return;
+      const existing = people.find(p => p.type === 'teacher' && p.name.toLowerCase() === g.name.toLowerCase());
+      if (existing) {
+        existing.schools.push({ id: school.id, name: school.name });
+        if (g.subject && !existing.detail.includes(g.subject)) existing.detail += (existing.detail?', ':'')+g.subject;
+      } else {
+        people.push({
+          id: 'gt:'+school.id+':'+i,
+          name: g.name,
+          type: 'teacher',
+          typeLabel: g.type || 'Guest Teacher',
+          schools: [{ id: school.id, name: school.name }],
+          email: '',
+          phone: '',
+          detail: g.subject || '',
+          photo: g.photo || null,
+        });
+      }
+    });
+
+    // Donors
+    (school.donors||[]).forEach((d,i) => {
+      if (!d.name) return;
+      const existing = people.find(p => p.type === 'donor' && p.name.toLowerCase() === d.name.toLowerCase());
+      if (existing) {
+        existing.schools.push({ id: school.id, name: school.name });
+      } else {
+        people.push({
+          id: 'don:'+school.id+':'+i,
+          name: d.name,
+          type: 'donor',
+          typeLabel: d.type || 'Donor',
+          schools: [{ id: school.id, name: school.name }],
+          email: d.email || '',
+          phone: d.phone || '',
+          detail: d.giving ? 'Giving: '+d.giving : '',
+          photo: null,
+        });
+      }
+    });
+
+    // Alumni
+    (school.alumni||[]).forEach((a,i) => {
+      if (!a.name) return;
+      people.push({
+        id: 'al:'+school.id+':'+i,
+        name: a.name,
+        type: 'alumni',
+        typeLabel: 'Alumni'+(a.gradYear?' '+a.gradYear:''),
+        schools: [{ id: school.id, name: school.name }],
+        email: '',
+        phone: '',
+        detail: [a.role, a.serving, a.location].filter(Boolean).join(' · '),
+        photo: null,
+      });
+    });
+  });
+
+  return people;
+}
+
+function renderPeopleDirectory() {
+  const q = (document.getElementById('pd-search')||{value:''}).value.toLowerCase();
+  const typeFilter = (document.getElementById('pd-type')||{value:''}).value;
+  const schoolFilter = (document.getElementById('pd-school')||{value:''}).value;
+  const multiOnly = document.getElementById('pd-multi-only')?.checked;
+
+  // Populate school filter
+  const schoolSel = document.getElementById('pd-school');
+  if (schoolSel) {
+    const cur = schoolSel.value;
+    schoolSel.innerHTML = '<option value="">All schools</option>' +
+      DB.schools.map(s=>`<option value="${s.id}"${s.id===cur?' selected':''}>${s.name}</option>`).join('');
+  }
+
+  let people = collectAllPeople();
+
+  // Filter
+  people = people.filter(p => {
+    if (multiOnly && p.schools.length < 2) return false;
+    if (typeFilter && p.type !== typeFilter) return false;
+    if (schoolFilter && !p.schools.some(s=>s.id===schoolFilter)) return false;
+    const txt = [p.name, p.typeLabel, p.detail, p.email, ...p.schools.map(s=>s.name)].join(' ').toLowerCase();
+    if (q && !txt.includes(q)) return false;
+    return true;
+  });
+
+  // Sort
+  people.sort((a,b) => {
+    let av = peopleSortCol==='name' ? a.name.toLowerCase() :
+             peopleSortCol==='type' ? a.type :
+             peopleSortCol==='school' ? a.schools[0]?.name.toLowerCase()||'' : a.name.toLowerCase();
+    let bv = peopleSortCol==='name' ? b.name.toLowerCase() :
+             peopleSortCol==='type' ? b.type :
+             peopleSortCol==='school' ? b.schools[0]?.name.toLowerCase()||'' : b.name.toLowerCase();
+    return peopleSortDir==='asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+  });
+
+  // Stats
+  const all = collectAllPeople();
+  const multiSchool = all.filter(p=>p.schools.length>1);
+  const statsEl = document.getElementById('pd-stats');
+  if (statsEl) statsEl.innerHTML = `
+    <div class="stats-row" style="margin-bottom:0;">
+      <div class="stat-card"><div class="stat-label">Total People</div><div class="stat-val">${all.length}</div></div>
+      <div class="stat-card"><div class="stat-label">Directors</div><div class="stat-val">${all.filter(p=>p.type==='director').length}</div></div>
+      <div class="stat-card"><div class="stat-label">Guest Teachers</div><div class="stat-val">${all.filter(p=>p.type==='teacher').length}</div></div>
+      <div class="stat-card"><div class="stat-label">Donors</div><div class="stat-val">${all.filter(p=>p.type==='donor').length}</div></div>
+      <div class="stat-card"><div class="stat-label">Multi-school</div><div class="stat-val" style="color:var(--gold);">${multiSchool.length}</div></div>
+    </div>`;
+
+  const TYPE_COLORS = {
+    director: 'badge-active',
+    faculty:  'badge-negotiating',
+    teacher:  'badge-contacted',
+    donor:    'badge-declined',
+    alumni:   'badge-inactive',
+  };
+
+  const tbody = document.getElementById('pd-tbody');
+  if (!tbody) return;
+
+  if (!people.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted);font-style:italic;">No people found.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = people.map(p => {
+    const avatar = p.photo
+      ? `<img src="${p.photo}" class="person-avatar" style="width:32px;height:32px;">`
+      : `<div class="person-avatar-placeholder" style="width:32px;height:32px;font-size:14px;">👤</div>`;
+
+    const schoolBadges = p.schools.map(s =>
+      `<span class="school-name" onclick="openQuickView('${s.id}')" style="display:inline-block;background:var(--gray-100);padding:1px 7px;border-radius:99px;font-size:12px;margin:1px;cursor:pointer;">${s.name}</span>`
+    ).join('');
+
+    const multiFlag = p.schools.length > 1
+      ? `<span style="background:#fff8e1;color:#8a6000;padding:1px 6px;border-radius:99px;font-size:11px;font-weight:500;margin-left:4px;">✦ ${p.schools.length} schools</span>`
+      : '';
+
+    return `<tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px;">
+          ${avatar}
+          <div>
+            <div style="font-weight:500;color:var(--navy);">${esc(p.name)}</div>
+            <div style="font-size:12px;color:var(--text-muted);">${esc(p.typeLabel)}</div>
+          </div>
+        </div>
+      </td>
+      <td><span class="badge ${TYPE_COLORS[p.type]||'badge-inactive'}" style="font-size:11px;">${p.typeLabel}</span></td>
+      <td style="max-width:200px;">${schoolBadges}${multiFlag}</td>
+      <td style="font-size:13px;color:var(--text-muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(p.detail||'—')}</td>
+      <td style="font-size:13px;">
+        ${p.email ? `<a href="mailto:${esc(p.email)}" style="color:var(--navy);display:block;">${esc(p.email)}</a>` : ''}
+        ${p.phone ? `<span style="color:var(--text-muted);">${esc(p.phone)}</span>` : ''}
+        ${!p.email && !p.phone ? '<span style="color:var(--text-muted);">—</span>' : ''}
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Update sort indicators
+  document.querySelectorAll('#page-people th.sortable').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    const col = th.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
+    if (col === peopleSortCol) th.classList.add(peopleSortDir==='asc'?'sort-asc':'sort-desc');
+  });
 }
 
 // ── NETWORK MAP ──
