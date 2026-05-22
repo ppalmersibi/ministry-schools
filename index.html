@@ -765,6 +765,7 @@ th.sort-desc::after { content: ' ↓'; color: var(--gold); }
           <div class="page-title">Journal</div>
           <div class="page-sub">A log of conversations, meetings, and notes across all schools</div>
         </div>
+        <button class="btn btn-primary" onclick="openJournalOverlay(null)">+ Add Entry</button>
       </div>
       <div class="toolbar">
         <input type="text" id="j-search" placeholder="Search journal entries…" oninput="renderJournal()">
@@ -951,6 +952,12 @@ th.sort-desc::after { content: ' ↓'; color: var(--gold); }
     </div>
     <div class="drawer-body">
       <div class="form-grid">
+        <div class="form-group full" id="je-school-row" style="display:none;">
+          <label>School *</label>
+          <select id="je-school-select">
+            <option value="">— Select a school —</option>
+          </select>
+        </div>
         <div class="form-group">
           <label>Date</label>
           <input type="date" id="je-date">
@@ -3260,10 +3267,7 @@ document.addEventListener('keydown', e => {
     if (document.getElementById('page-partners').classList.contains('active')) openSchoolForm();
     else if (document.getElementById('page-prospects').classList.contains('active')) openProspectForm();
     else if (document.getElementById('page-trips').classList.contains('active')) openTripForm();
-    else if (document.getElementById('page-journal').classList.contains('active')) {
-      const firstSchool = DB.schools[0];
-      if (firstSchool) openJournalOverlay(firstSchool.id);
-    }
+    else if (document.getElementById('page-journal').classList.contains('active')) openJournalOverlay(null);
   }
 });
 
@@ -3766,17 +3770,30 @@ let journalEditingId = null;
 function openJournalOverlay(schoolId, entryId) {
   journalSchoolId = schoolId;
   journalEditingId = entryId || null;
-  const school = DB.schools.find(s=>s.id===schoolId);
+  const school = schoolId ? DB.schools.find(s=>s.id===schoolId) : null;
+
   document.getElementById('journal-overlay-title').textContent = entryId ? 'Edit Journal Entry' : 'New Journal Entry';
   document.getElementById('journal-overlay-sub').textContent = school ? school.name : '';
 
-  // Populate with whom from director + faculty as saved people
+  // Show/hide school picker
+  const schoolRow = document.getElementById('je-school-row');
+  const schoolSel = document.getElementById('je-school-select');
+  if (!schoolId) {
+    schoolRow.style.display = 'block';
+    schoolSel.innerHTML = '<option value="">— Select a school —</option>' +
+      DB.schools.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
+    schoolSel.value = '';
+  } else {
+    schoolRow.style.display = 'none';
+  }
+
+  // Seed people from school
   if (school) {
     if (school.directorName) savePerson(school.directorName);
     (school.faculty||[]).forEach(f => { if(f.name) savePerson(f.name); });
   }
 
-  if (entryId) {
+  if (entryId && school) {
     const entry = (school.journal||[]).find(e=>e.id===entryId);
     if (entry) {
       document.getElementById('je-date').value = entry.date||'';
@@ -3789,7 +3806,6 @@ function openJournalOverlay(schoolId, entryId) {
     document.getElementById('je-date').value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
     document.getElementById('je-category').value = '📝 General';
     document.getElementById('je-with-whom').value = '';
-    document.getElementById('je-with-whom-select').value = '';
     document.getElementById('je-notes').value = '';
   }
   document.getElementById('journal-overlay').classList.add('open');
@@ -3802,7 +3818,11 @@ function closeJournalOverlay() {
 }
 
 function saveJournalEntry() {
-  if (!journalSchoolId) return;
+  // If no school pre-selected, read from picker
+  if (!journalSchoolId) {
+    journalSchoolId = document.getElementById('je-school-select')?.value || null;
+  }
+  if (!journalSchoolId) { alert('Please select a school.'); return; }
   const notes = document.getElementById('je-notes').value.trim();
   if (!notes) { alert('Please add some notes.'); return; }
   const withWhom = document.getElementById('je-with-whom').value.trim();
