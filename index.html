@@ -3657,7 +3657,7 @@ function renderProspects(){
       <td style="display:flex;gap:4px;">
         <button class="btn-icon" title="Edit" onclick="openProspectForm('${p.id}')">✏️</button>
         <button class="btn-icon danger" title="Delete" onclick="deleteProspect('${p.id}')">🗑</button>
-        <button class="btn-icon" title="Convert to partner" onclick="convertProspect('${p.id}')" style="font-size:13px;">✓</button>
+        <button class="btn btn-ghost btn-sm" title="Convert to partner school" onclick="convertProspect('${p.id}')" style="font-size:12px;">🎓 Convert to Partner</button>
       </td>
     </tr>
   `).join(''):`<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);font-style:italic;">No prospects found.</td></tr>`;
@@ -3684,14 +3684,62 @@ function deleteProspect(id){
   save();renderProspects();
 }
 
-function convertProspect(id){
-  if(!confirm('Convert this prospect to a partner school? The prospect record will be removed.')) return;
-  const p=DB.prospects.find(x=>x.id===id);
-  DB.prospects=DB.prospects.filter(x=>x.id!==id);
-  DB.schools.push({id:'s'+Date.now(),name:p.name,city:p.city,country:p.country,website:p.website,overseeingChurch:p.overseeingChurch,email:p.email,phone:p.phone,status:'Active',estYear:new Date().getFullYear(),notes:p.notes,faculty:[],visits:[],guestTeachers:[],financials:[],initiatives:[],gradCohorts:[],donors:[],logo:null});
-  logActivity(`Converted prospect to partner: ${p.name}`);
-  save();renderProspects();renderPartners();populateCountryFilter();
+function convertProspect(id) {
+  const p = DB.prospects.find(x=>x.id===id);
+  if (!p) return;
+  if (!confirm(`Convert "${p.name}" to a partner school?\n\nAll prospect data (contact info, notes, journal entries) will be carried over. The prospect record will be removed.`)) return;
+
+  const newSchool = {
+    id: 's'+Date.now(),
+    name: p.name,
+    city: p.city||'',
+    state: p.state||'',
+    country: p.country||'',
+    website: p.website||'',
+    overseeingChurch: p.overseeingChurch||'',
+    email: p.email||'',
+    phone: p.phone||'',
+    address: p.address||'',
+    region: p.region||'',
+    lat: p.lat||null,
+    lng: p.lng||null,
+    status: 'Active',
+    estYear: new Date().getFullYear(),
+    renewedYear: new Date().getFullYear(),
+    notes: p.notes||'',
+    // People & activity
+    directorName: p.contact||'',
+    faculty: [],
+    visits: [],
+    guestTeachers: [],
+    financials: [],
+    initiatives: [],
+    gradCohorts: [],
+    donors: [],
+    churches: [],
+    milestones: [],
+    alumni: [],
+    annualReports: [],
+    // Carry over journal entries if any
+    journal: (p.journal||[]).map(e=>({...e, schoolId: 's'+Date.now()})),
+    logo: null,
+  };
+
+  DB.schools.push(newSchool);
+  DB.prospects = DB.prospects.filter(x=>x.id!==id);
+  logActivity(`Converted prospect to partner school: ${p.name}`);
+  save();
+  renderProspects();
+  renderPartners();
+  populateCountryFilter();
   showPage('partners');
+
+  // Open the school form so user can complete the record
+  setTimeout(() => {
+    if (confirm(`"${p.name}" has been added as an Active partner school.\n\nOpen the school form to complete the record?`)) {
+      openSchoolForm(newSchool.id);
+    }
+  }, 300);
 }
 
 // ── DATA MGMT ──
