@@ -1682,7 +1682,8 @@ let DB = {
   prospects: [],
   activity: [],
   people: [],
-  trips: []
+  trips: [],
+  journal: []
 };
 
 let editingSchoolId = null;
@@ -3766,7 +3767,7 @@ function importData(e){
 function clearAllData(){
   if(!confirm('Delete ALL data permanently? This cannot be undone.'))return;
   if(!confirm('Are you absolutely sure?'))return;
-  DB={passwordHash:DB.passwordHash,schools:[],prospects:[],activity:[],people:DB.people||[],trips:[]};
+  DB={passwordHash:DB.passwordHash,schools:[],prospects:[],activity:[],people:DB.people||[],trips:[],journal:[]};
   save();refreshAll();
 }
 
@@ -3828,8 +3829,15 @@ function openJournalOverlay(schoolId, entryId) {
   const schoolSel = document.getElementById('je-school-select');
   if (!schoolId) {
     schoolRow.style.display = 'block';
-    schoolSel.innerHTML = '<option value="">— Select a school —</option>' +
-      DB.schools.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
+    schoolSel.innerHTML =
+      '<option value="">— Select (optional) —</option>' +
+      '<option value="__general__">📝 General / No specific school</option>' +
+      (DB.prospects.length ? '<optgroup label="Prospective Schools">' +
+        DB.prospects.map(p=>`<option value="__prospect__${p.id}">${esc(p.name)} (Prospect)</option>`).join('') +
+      '</optgroup>' : '') +
+      '<optgroup label="Partner Schools">' +
+        DB.schools.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('') +
+      '</optgroup>';
     schoolSel.value = '';
   } else {
     schoolRow.style.display = 'none';
@@ -3841,8 +3849,18 @@ function openJournalOverlay(schoolId, entryId) {
     (school.faculty||[]).forEach(f => { if(f.name) savePerson(f.name); });
   }
 
-  if (entryId && school) {
-    const entry = (school.journal||[]).find(e=>e.id===entryId);
+  if (entryId) {
+    // Find entry — could be in a school journal or DB.journal
+    let entry = null;
+    if (school) {
+      entry = (school.journal||[]).find(e=>e.id===entryId);
+    } else {
+      entry = (DB.journal||[]).find(e=>e.id===entryId);
+      // Pre-select the right option in the picker
+      if (entry && schoolSel) {
+        schoolSel.value = entry.prospectId ? '__prospect__'+entry.prospectId : '__general__';
+      }
+    }
     if (entry) {
       document.getElementById('je-date').value = entry.date||'';
       document.getElementById('je-category').value = entry.category||'📝 General';
@@ -3868,32 +3886,62 @@ function closeJournalOverlay() {
 function saveJournalEntry() {
   // If no school pre-selected, read from picker
   if (!journalSchoolId) {
-    journalSchoolId = document.getElementById('je-school-select')?.value || null;
+    journalSchoolId = document.getElementById('je-school-select')?.value || '__general__';
   }
-  if (!journalSchoolId) { alert('Please select a school.'); return; }
   const notes = document.getElementById('je-notes').value.trim();
   if (!notes) { alert('Please add some notes.'); return; }
   const withWhom = document.getElementById('je-with-whom').value.trim();
   if (withWhom) savePerson(withWhom);
-  const school = DB.schools.find(s=>s.id===journalSchoolId);
-  if (!school) return;
-  if (!school.journal) school.journal = [];
+
   const entry = {
     id: journalEditingId || 'j'+Date.now(),
     date: document.getElementById('je-date').value,
     category: document.getElementById('je-category').value,
-    withWhom: document.getElementById('je-with-whom').value.trim(),
+    withWhom: withWhom,
     notes: notes,
-    schoolId: journalSchoolId,
-    schoolName: school.name
   };
-  if (journalEditingId) {
-    const i = school.journal.findIndex(e=>e.id===journalEditingId);
-    school.journal[i] = entry;
+
+  if (journalSchoolId && journalSchoolId !== '__general__' && !journalSchoolId.startsWith('__prospect__')) {
+    // Partner school entry
+    const school = DB.schools.find(s=>s.id===journalSchoolId);
+    if (!school) return;
+    if (!school.journal) school.journal = [];
+    entry.schoolId = journalSchoolId;
+    entry.schoolName = school.name;
+    if (journalEditingId) {
+      const i = school.journal.findIndex(e=>e.id===journalEditingId);
+      if (i>=0) school.journal[i] = entry;
+    } else {
+      school.journal.push(entry);
+    }
+    logActivity(`Journal entry added for ${school.name}`);
+  } else if (journalSchoolId && journalSchoolId.startsWith('__prospect__')) {
+    // Prospect entry
+    const prospectId = journalSchoolId.replace('__prospect__','');
+    const prospect = DB.prospects.find(p=>p.id===prospectId);
+    entry.prospectId = prospectId;
+    entry.schoolName = prospect ? prospect.name+' (Prospect)' : 'Prospect';
+    if (!DB.journal) DB.journal = [];
+    if (journalEditingId) {
+      const i = DB.journal.findIndex(e=>e.id===journalEditingId);
+      if (i>=0) DB.journal[i] = entry; else DB.journal.push(entry);
+    } else {
+      DB.journal.push(entry);
+    }
+    logActivity(`Journal entry added for ${entry.schoolName}`);
   } else {
-    school.journal.push(entry);
+    // General entry — no school
+    entry.schoolName = 'General';
+    if (!DB.journal) DB.journal = [];
+    if (journalEditingId) {
+      const i = DB.journal.findIndex(e=>e.id===journalEditingId);
+      if (i>=0) DB.journal[i] = entry; else DB.journal.push(entry);
+    } else {
+      DB.journal.push(entry);
+    }
+    logActivity(`General journal entry added`);
   }
-  logActivity(`Journal entry added for ${school.name}`);
+
   save();
   closeJournalOverlay();
   if (document.getElementById('page-journal').classList.contains('active')) renderJournal();
@@ -3901,9 +3949,12 @@ function saveJournalEntry() {
 
 function deleteJournalEntry(schoolId, entryId) {
   if (!confirm('Delete this journal entry?')) return;
-  const school = DB.schools.find(s=>s.id===schoolId);
-  if (!school) return;
-  school.journal = (school.journal||[]).filter(e=>e.id!==entryId);
+  if (!schoolId || schoolId === '__general__' || schoolId.startsWith('__prospect__')) {
+    DB.journal = (DB.journal||[]).filter(e=>e.id!==entryId);
+  } else {
+    const school = DB.schools.find(s=>s.id===schoolId);
+    if (school) school.journal = (school.journal||[]).filter(e=>e.id!==entryId);
+  }
   save();
   renderJournal();
 }
@@ -3913,29 +3964,55 @@ function renderJournal() {
   const sf = (document.getElementById('j-school')||{value:''}).value;
   const cf = (document.getElementById('j-category')||{value:''}).value;
 
-  // Populate school filter
+  // Populate school filter with partners, prospects, and general
   const schoolSel = document.getElementById('j-school');
   if (schoolSel) {
     const cur = schoolSel.value;
-    schoolSel.innerHTML = '<option value="">All schools</option>' + DB.schools.map(s=>`<option value="${s.id}"${s.id===cur?' selected':''}>${esc(s.name)}</option>`).join('');
+    schoolSel.innerHTML =
+      '<option value="">All entries</option>' +
+      '<option value="__general__">📝 General (no school)</option>' +
+      (DB.prospects.length ? '<optgroup label="Prospective Schools">' +
+        DB.prospects.map(p=>`<option value="__prospect__${p.id}"${('__prospect__'+p.id)===cur?' selected':''}>${esc(p.name)} (Prospect)</option>`).join('') +
+      '</optgroup>' : '') +
+      '<optgroup label="Partner Schools">' +
+        DB.schools.map(s=>`<option value="${s.id}"${s.id===cur?' selected':''}>${esc(s.name)}</option>`).join('') +
+      '</optgroup>';
   }
 
   // Gather all entries
   let entries = [];
+
+  // Partner school entries
   DB.schools.forEach(s => {
     (s.journal||[]).forEach(e => {
-      entries.push({...e, schoolId:s.id, schoolName:s.name});
+      entries.push({...e, schoolId: s.id, schoolName: s.name, _type: 'school'});
+    });
+  });
+
+  // General + prospect entries from DB.journal
+  (DB.journal||[]).forEach(e => {
+    entries.push({
+      ...e,
+      schoolId: e.prospectId ? '__prospect__'+e.prospectId : '__general__',
+      _type: e.prospectId ? 'prospect' : 'general'
     });
   });
 
   // Filter
   entries = entries.filter(e => {
     const txt = [e.notes, e.withWhom, e.schoolName, e.category].join(' ').toLowerCase();
-    return (!q||txt.includes(q)) && (!sf||e.schoolId===sf) && (!cf||e.category===cf);
+    if (q && !txt.includes(q)) return false;
+    if (cf && e.category !== cf) return false;
+    if (sf) {
+      if (sf === '__general__') return e._type === 'general';
+      if (sf.startsWith('__prospect__')) return e.schoolId === sf;
+      return e.schoolId === sf;
+    }
+    return true;
   });
 
   // Sort newest first
-  entries.sort((a,b)=>b.date.localeCompare(a.date));
+  entries.sort((a,b) => (b.date||'').localeCompare(a.date||''));
 
   const el = document.getElementById('journal-list');
   if (!el) return;
@@ -3955,11 +4032,20 @@ function renderJournal() {
 
   el.innerHTML = '<div class="card">'+entries.map(e=>{
     const style = catColors[e.category]||'#f5f5f5;color:#3d3830';
+    const typeBadge = e._type === 'general'
+      ? `<span style="background:#f5f5f5;color:#3d3830;padding:2px 8px;border-radius:99px;font-size:11px;">📝 General</span>`
+      : e._type === 'prospect'
+      ? `<span style="background:#fff8e1;color:#8a6000;padding:2px 8px;border-radius:99px;font-size:11px;">🔍 Prospect</span>`
+      : '';
+    const schoolLabel = e.schoolName
+      ? `<strong style="color:var(--navy);font-size:13px;">${esc(e.schoolName)}</strong>`
+      : '<span style="color:var(--text-muted);font-size:13px;">General</span>';
     return `
     <div class="list-item" style="flex-direction:column;align-items:stretch;gap:6px;padding:14px 16px;">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <span style="background:${style};padding:2px 9px;border-radius:99px;font-size:12px;font-weight:500;">${e.category}</span>
-        <strong style="color:var(--navy);font-size:13px;">${e.schoolName}</strong>
+        ${schoolLabel}
+        ${typeBadge}
         <span style="color:var(--text-muted);font-size:13px;">${e.date||''}</span>
         ${e.withWhom?`<span style="font-size:13px;color:var(--text-muted);">with ${esc(e.withWhom)}</span>`:''}
         <div style="margin-left:auto;display:flex;gap:4px;">
