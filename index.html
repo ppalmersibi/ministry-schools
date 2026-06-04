@@ -774,13 +774,13 @@ th.sort-desc::after { content: ' ↓'; color: var(--gold); }
         </select>
         <select id="j-category" onchange="renderJournal()">
           <option value="">All categories</option>
-          <option>📞 Call</option>
+          <option>🎥 Video Call</option>
+          <option>📞 Phone Call</option>
           <option>📧 Email</option>
           <option>🤝 Meeting</option>
           <option>✈️ Visit</option>
           <option>🙏 Prayer</option>
-          <option>📝 General</option>
-        </select>
+          <option>📝 General</option>        </select>
       </div>
       <div id="journal-list"></div>
     </div>
@@ -820,6 +820,7 @@ th.sort-desc::after { content: ' ↓'; color: var(--gold); }
               <th class="sortable" onclick="setPeopleSort('school')">School(s)</th>
               <th>Details</th>
               <th>Contact</th>
+              <th></th>
             </tr></thead>
             <tbody id="pd-tbody"></tbody>
           </table>
@@ -965,7 +966,8 @@ th.sort-desc::after { content: ' ↓'; color: var(--gold); }
         <div class="form-group">
           <label>Category</label>
           <select id="je-category">
-            <option>📞 Call</option>
+            <option>🎥 Video Call</option>
+            <option>📞 Phone Call</option>
             <option>📧 Email</option>
             <option>🤝 Meeting</option>
             <option>✈️ Visit</option>
@@ -2348,7 +2350,7 @@ function deleteSchool(id) {
 }
 
 // ── SCHOOL FORM ──
-function openSchoolForm(id) {
+function openSchoolForm(id, startTab) {
   editingSchoolId = id || null;
   tempFaculty = [];
   tempVisits = [];
@@ -2364,7 +2366,7 @@ function openSchoolForm(id) {
   tempLogo = null;
   tempDirectorPhoto = null;
   tempGTPhoto = null;
-  switchSFTab(0);
+  switchSFTab(startTab ?? 0);
 
   if (id) {
     const s = DB.schools.find(x=>x.id===id);
@@ -4022,7 +4024,7 @@ function renderJournal() {
   }
 
   const catColors = {
-    '📞 Call':'#e3f2fd;color:#0d47a1',
+    '🎥 Video Call':'#e3f2fd;color:#0d47a1',
     '📧 Email':'#f3e5f5;color:#4a1580',
     '🤝 Meeting':'#e8f5e9;color:#1a5c35',
     '✈️ Visit':'#fff3e0;color:#8b4500',
@@ -4162,6 +4164,22 @@ function printAnnualSummary() {
 // ── PEOPLE DIRECTORY ──
 let peopleSortCol = 'name';
 let peopleSortDir = 'asc';
+
+// ── PEOPLE DIRECTORY ──
+const PERSON_TYPE_TAB = {
+  director: 1,
+  faculty:  1,
+  teacher:  4,
+  donor:    6,
+  alumni:   11,
+};
+
+function openPersonEdit(type, schoolId) {
+  if (!schoolId) return;
+  const tab = PERSON_TYPE_TAB[type] ?? 0;
+  showPage('partners');
+  setTimeout(() => openSchoolForm(schoolId, tab), 100);
+}
 
 function setPeopleSort(col) {
   if (peopleSortCol === col) peopleSortDir = peopleSortDir === 'asc' ? 'desc' : 'asc';
@@ -4369,6 +4387,9 @@ function renderPeopleDirectory() {
         ${p.email ? `<a href="mailto:${esc(p.email)}" style="color:var(--navy);display:block;">${esc(p.email)}</a>` : ''}
         ${p.phone ? `<span style="color:var(--text-muted);">${esc(p.phone)}</span>` : ''}
         ${!p.email && !p.phone ? '<span style="color:var(--text-muted);">—</span>' : ''}
+      </td>
+      <td>
+        <button class="btn-icon" onclick="openPersonEdit('${p.type}','${p.schools[0]?.id||''}')" title="Edit in school record">✏️</button>
       </td>
     </tr>`;
   }).join('');
